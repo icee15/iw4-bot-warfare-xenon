@@ -1,15 +1,3 @@
-/*
-	_bot_utility
-	Author: INeedGames
-	Date: 09/26/2020
-	The shared functions for bots
-
-	Notes for engine
-		obv the old bot behavior should be changed to use gsc built-ins to control bots
-		bots using objects needs to be fixed
-		setSpawnWeapon and switchtoweapon should be modified to work for testclients
-*/
-
 #include common_scripts\utility;
 #include maps\mp\_utility;
 #include maps\mp\gametypes\_hud_util;
@@ -48,30 +36,6 @@ BotBuiltinPrintConsole( s )
 	{
 		[[ level.bot_builtins[ "printconsole" ] ]]( s );
 	}
-}
-
-/*
-	Writes to the file, mode can be "append" or "write"
-*/
-BotBuiltinFileWrite( file, contents, mode )
-{
-	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "filewrite" ] ) )
-	{
-		[[ level.bot_builtins[ "filewrite" ] ]]( file, contents, mode );
-	}
-}
-
-/*
-	Returns the whole file as a string
-*/
-BotBuiltinFileRead( file )
-{
-	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "fileread" ] ) )
-	{
-		return [[ level.bot_builtins[ "fileread" ] ]]( file );
-	}
-	
-	return undefined;
 }
 
 /*
@@ -124,6 +88,17 @@ BotBuiltinBotMovement( forward, right )
 }
 
 /*
+	Cod4x built-in
+*/
+BotBuiltinBotMoveTo( where )
+{
+	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "botmoveto" ] ) )
+	{
+		self [[ level.bot_builtins[ "botmoveto" ] ]]( where );
+	}
+}
+
+/*
 	Sets melee params
 */
 BotBuiltinBotMeleeParams( yaw, dist )
@@ -135,17 +110,6 @@ BotBuiltinBotMeleeParams( yaw, dist )
 }
 
 /*
-	Sets remote angles
-*/
-BotBuiltinBotRemoteAngles( pitch, yaw )
-{
-	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "botremoteangles" ] ) )
-	{
-		self [[ level.bot_builtins[ "botremoteangles" ] ]]( pitch, yaw );
-	}
-}
-
-/*
 	Sets angles
 */
 BotBuiltinBotAngles( angles )
@@ -153,6 +117,67 @@ BotBuiltinBotAngles( angles )
 	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "botangles" ] ) )
 	{
 		self [[ level.bot_builtins[ "botangles" ] ]]( angles );
+	}
+}
+
+/*
+	Test if is a bot
+*/
+BotBuiltinIsBot()
+{
+	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "isbot" ] ) )
+	{
+		return self [[ level.bot_builtins[ "isbot" ] ]]();
+	}
+	
+	return false;
+}
+
+/*
+	Opens the file
+*/
+BotBuiltinFileOpen( file, mode )
+{
+	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "fs_fopen" ] ) )
+	{
+		return [[ level.bot_builtins[ "fs_fopen" ] ]]( file, mode );
+	}
+	
+	return 0;
+}
+
+/*
+	Closes the file
+*/
+BotBuiltinFileClose( fh )
+{
+	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "fs_fclose" ] ) )
+	{
+		[[ level.bot_builtins[ "fs_fclose" ] ]]( fh );
+	}
+}
+
+/*
+	Closes the file
+*/
+BotBuiltinReadLine( fh )
+{
+	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "fs_readline" ] ) )
+	{
+		return [[ level.bot_builtins[ "fs_readline" ] ]]( fh );
+	}
+	
+	return undefined;
+}
+
+/*
+	Closes the file
+*/
+BotBuiltinWriteLine( fh, contents )
+{
+	if ( isdefined( level.bot_builtins ) && isdefined( level.bot_builtins[ "fs_writeline" ] ) )
+	{
+		[[ level.bot_builtins[ "fs_writeline" ] ]]( fh, contents );
 	}
 }
 
@@ -177,20 +202,22 @@ doHostCheck()
 	}
 	
 	result = false;
-	
-	if ( getdvar( "bots_main_firstIsHost" ) != "0" )
+
+	// The host client num is not always 0, when a bot is already in the game
+	// when the round starts, it typically gets the client num 0.
+	// The host is the first client with pers["isBot"] undefined.
+	hostClientNum = 0;
+	for (i = 0; i < level.players.size; i++)
 	{
-		BotBuiltinPrintConsole( "WARNING: bots_main_firstIsHost is enabled" );
-		
-		if ( getdvar( "bots_main_firstIsHost" ) == "1" )
+		if (!level.players[i] is_bot())
 		{
-			setdvar( "bots_main_firstIsHost", self getguid() );
+			hostClientNum = i;
+			break;
 		}
-		
-		if ( getdvar( "bots_main_firstIsHost" ) == self getguid() + "" )
-		{
-			result = true;
-		}
+	}
+	if (self == level.players[hostClientNum])
+	{
+		result = true;
 	}
 	
 	DvarGUID = getdvar( "bots_main_GUIDs" );
@@ -208,7 +235,7 @@ doHostCheck()
 		}
 	}
 	
-	if ( !self ishost() && !result )
+	if ( !result )
 	{
 		return;
 	}
@@ -221,10 +248,7 @@ doHostCheck()
 */
 is_bot()
 {
-	assert( isdefined( self ) );
-	assert( isplayer( self ) );
-	
-	return ( ( isdefined( self.pers[ "isBot" ] ) && self.pers[ "isBot" ] ) || ( isdefined( self.pers[ "isBotWarfare" ] ) && self.pers[ "isBotWarfare" ] ) || issubstr( self getguid() + "", "bot" ) );
+	return self BotBuiltinIsBot();
 }
 
 /*
@@ -249,6 +273,30 @@ BotSetStance( stance )
 }
 
 /*
+	Bot presses the button for time.
+*/
+BotPressAttack( time )
+{
+	self maps\mp\bots\_bot_internal::pressFire( time );
+}
+
+/*
+	Bot presses the ads button for time.
+*/
+BotPressADS( time )
+{
+	self maps\mp\bots\_bot_internal::pressADS( time );
+}
+
+/*
+	Bot presses the use button for time.
+*/
+BotPressUse( time )
+{
+	self maps\mp\bots\_bot_internal::use( time );
+}
+
+/*
 	Bot presses the frag button for time.
 */
 BotPressFrag( time )
@@ -265,27 +313,11 @@ BotPressSmoke( time )
 }
 
 /*
-	Bot will press the ads button for the time
+	Returns the bot's random assigned number.
 */
-BotpressADS( time )
+BotGetRandom()
 {
-	self maps\mp\bots\_bot_internal::pressADS( time );
-}
-
-/*
-	Bot presses the use button for time.
-*/
-BotPressUse( time )
-{
-	self maps\mp\bots\_bot_internal::use( time );
-}
-
-/*
-	Bots will press the attack button for a time
-*/
-BotPressAttack( time )
-{
-	self maps\mp\bots\_bot_internal::pressFire( time );
+	return self.bot.rand;
 }
 
 /*
@@ -302,15 +334,7 @@ BotGetTargetRandom()
 }
 
 /*
-	Returns the bot's random assigned number.
-*/
-BotGetRandom()
-{
-	return self.bot.rand;
-}
-
-/*
-	Returns if the bot is pressing frag button.
+	Returns if the bot is fragging.
 */
 IsBotFragging()
 {
@@ -347,6 +371,14 @@ IsBotReloading()
 IsBotKnifing()
 {
 	return self.bot.isknifingafter;
+}
+
+/*
+	If the model of the player is good
+*/
+IsPlayerModelOK()
+{
+	return ( isdefined( self.bot_model_fix ) );
 }
 
 /*
@@ -411,6 +443,14 @@ HasScriptGoal()
 }
 
 /*
+	Returns the pos of the bot's goal
+*/
+GetScriptGoal()
+{
+	return self.bot.script_goal;
+}
+
+/*
 	Sets the bot's goal, will acheive it when dist away from it.
 */
 SetScriptGoal( goal, dist )
@@ -428,27 +468,11 @@ SetScriptGoal( goal, dist )
 }
 
 /*
-	Returns the pos of the bot's goal
-*/
-GetScriptGoal()
-{
-	return self.bot.script_goal;
-}
-
-/*
 	Clears the bot's goal.
 */
 ClearScriptGoal()
 {
 	self SetScriptGoal( undefined, 0 );
-}
-
-/*
-	Returns the location of the bot's javelin target
-*/
-HasBotJavelinLocation()
-{
-	return isdefined( self.bot.jav_loc );
 }
 
 /*
@@ -510,26 +534,9 @@ HasScriptAimPos()
 }
 
 /*
-	Sets the bot's javelin target location
-*/
-SetBotJavelinLocation( loc )
-{
-	self.bot.jav_loc = loc;
-	self notify( "new_enemy" );
-}
-
-/*
-	Clears the bot's javelin location
-*/
-ClearBotJavelinLocation()
-{
-	self SetBotJavelinLocation( undefined );
-}
-
-/*
 	Sets the bot's target to be this ent.
 */
-setAttacker( att )
+SetAttacker( att )
 {
 	self.bot.target_this_frame = att;
 }
@@ -575,7 +582,7 @@ HasScriptEnemy()
 /*
 	Returns if the bot has a threat.
 */
-hasThreat()
+HasThreat()
 {
 	return ( isdefined( self getThreat() ) );
 }
@@ -597,6 +604,14 @@ isPlanting()
 }
 
 /*
+	If the player is in laststand
+*/
+inLastStand()
+{
+	return ( isdefined( self.laststand ) && self.laststand );
+}
+
+/*
 	If the player is carrying a bomb
 */
 isBombCarrier()
@@ -613,41 +628,9 @@ isInUse()
 }
 
 /*
-	If the player is in laststand
-*/
-inLastStand()
-{
-	return ( isdefined( self.laststand ) && self.laststand );
-}
-
-/*
-	Is being revived
-*/
-isBeingRevived()
-{
-	return ( isdefined( self.beingrevived ) && self.beingrevived );
-}
-
-/*
-	If the player is in final stand
-*/
-inFinalStand()
-{
-	return ( isdefined( self.infinalstand ) && self.infinalstand );
-}
-
-/*
-	If the player is the flag carrier
-*/
-isFlagCarrier()
-{
-	return ( isdefined( self.carryflag ) && self.carryflag );
-}
-
-/*
 	Returns if we are stunned.
 */
-isStunned()
+IsStunned()
 {
 	return ( isdefined( self.concussionendtime ) && self.concussionendtime > gettime() );
 }
@@ -665,7 +648,7 @@ isArtShocked()
 */
 getValidTube()
 {
-	weaps = self getweaponslistall();
+	weaps = self getweaponslist();
 	
 	for ( i = 0; i < weaps.size; i++ )
 	{
@@ -676,7 +659,7 @@ getValidTube()
 			continue;
 		}
 		
-		if ( ( issubstr( weap, "gl_" ) && !issubstr( weap, "_gl_" ) ) || weap == "m79_mp" )
+		if ( issubstr( weap, "gl_" ) && !issubstr( weap, "_gl_" ) )
 		{
 			return weap;
 		}
@@ -686,33 +669,101 @@ getValidTube()
 }
 
 /*
-	iw5
+	Returns a random grenade in the bot's inventory.
 */
-allowClassChoiceUtil()
+getValidGrenade()
 {
-	entry = tablelookup( "mp/gametypesTable.csv", 0, level.gametype, 4 );
+	grenadeTypes = [];
+	grenadeTypes[ grenadeTypes.size ] = "frag_grenade_mp";
+	grenadeTypes[ grenadeTypes.size ] = "smoke_grenade_mp";
+	grenadeTypes[ grenadeTypes.size ] = "flash_grenade_mp";
+	grenadeTypes[ grenadeTypes.size ] = "concussion_grenade_mp";
 	
-	if ( !isdefined( entry ) || entry == "" )
+	possibles = [];
+	
+	for ( i = 0; i < grenadeTypes.size; i++ )
 	{
-		return true;
+		if ( !self hasweapon( grenadeTypes[ i ] ) )
+		{
+			continue;
+		}
+		
+		if ( !self getammocount( grenadeTypes[ i ] ) )
+		{
+			continue;
+		}
+		
+		possibles[ possibles.size ] = grenadeTypes[ i ];
 	}
 	
-	return int( entry );
+	return random( possibles );
 }
 
 /*
-	iw5
+	CoD4 meme
 */
-allowTeamChoiceUtil()
+getWinningTeam()
 {
-	entry = tablelookup( "mp/gametypesTable.csv", 0, level.gametype, 5 );
-	
-	if ( !isdefined( entry ) || entry == "" )
+	if ( maps\mp\gametypes\_globallogic::getgamescore( "allies" ) == maps\mp\gametypes\_globallogic::getgamescore( "axis" ) )
 	{
-		return true;
+		winner = "tie";
+	}
+	else if ( maps\mp\gametypes\_globallogic::getgamescore( "allies" ) > maps\mp\gametypes\_globallogic::getgamescore( "axis" ) )
+	{
+		winner = "allies";
+	}
+	else
+	{
+		winner = "axis";
 	}
 	
-	return int( entry );
+	return winner;
+}
+
+/*
+	CoD4
+*/
+getBaseWeaponName( weap )
+{
+	return strtok( weap, "_" )[ 0 ];
+}
+
+/*
+	Returns if the given weapon is full auto.
+*/
+WeaponIsFullAuto( weap )
+{
+	weaptoks = strtok( weap, "_" );
+	
+	return isdefined( weaptoks[ 0 ] ) && isstring( weaptoks[ 0 ] ) && isdefined( level.bots_fullautoguns[ weaptoks[ 0 ] ] );
+}
+
+/*
+	Returns what our eye height is.
+*/
+getEyeHeight()
+{
+	stance = self getstance();
+	
+	if ( self inLastStand() || stance == "prone" )
+	{
+		return 11;
+	}
+	
+	if ( stance == "crouch" )
+	{
+		return 40;
+	}
+	
+	return 60;
+}
+
+/*
+	Returns (iw4) eye pos.
+*/
+getEyePos()
+{
+	return self.origin + ( 0, 0, self getEyeHeight() );
 }
 
 /*
@@ -739,73 +790,258 @@ waittill_either_return( str1, str2 )
 }
 
 /*
-	Returns a random grenade in the bot's inventory.
+	Waits until either of the nots.
 */
-getValidGrenade()
+waittill_either( not, not1 )
 {
-	grenadeTypes = [];
-	grenadeTypes[ grenadeTypes.size ] = "frag_grenade_mp";
-	grenadeTypes[ grenadeTypes.size ] = "smoke_grenade_mp";
-	grenadeTypes[ grenadeTypes.size ] = "flash_grenade_mp";
-	grenadeTypes[ grenadeTypes.size ] = "concussion_grenade_mp";
-	grenadeTypes[ grenadeTypes.size ] = "semtex_mp";
-	grenadeTypes[ grenadeTypes.size ] = "throwingknife_mp";
-	
-	possibles = [];
-	
-	for ( i = 0; i < grenadeTypes.size; i++ )
+	self endon( not );
+	self waittill( not1 );
+}
+
+/*
+	iw5
+*/
+allowClassChoice()
+{
+	return true;
+}
+
+/*
+	iw5
+*/
+allowTeamChoice()
+{
+	return true;
+}
+
+/*
+	Taken from iw4 script
+*/
+waittill_any_timeout( timeOut, string1, string2, string3, string4, string5 )
+{
+	if ( ( !isdefined( string1 ) || string1 != "death" ) && ( !isdefined( string2 ) || string2 != "death" ) && ( !isdefined( string3 ) || string3 != "death" ) && ( !isdefined( string4 ) || string4 != "death" ) && ( !isdefined( string5 ) || string5 != "death" ) )
 	{
-		if ( !self hasweapon( grenadeTypes[ i ] ) )
-		{
-			continue;
-		}
-		
-		if ( !self getammocount( grenadeTypes[ i ] ) )
-		{
-			continue;
-		}
-		
-		possibles[ possibles.size ] = grenadeTypes[ i ];
+		self endon( "death" );
 	}
 	
-	return random( possibles );
-}
-
-/*
-	If the weapon is not a script weapon (bomb, killstreak, etc, grenades)
-*/
-isWeaponPrimary( weap )
-{
-	return ( maps\mp\gametypes\_weapons::isprimaryweapon( weap ) || maps\mp\gametypes\_weapons::isaltmodeweapon( weap ) );
-}
-
-/*
-	If the ent is a vehicle
-*/
-entIsVehicle( ent )
-{
-	return ( ent.classname == "script_vehicle" || ent.model == "vehicle_uav_static_mp" || ent.model == "vehicle_ac130_coop" );
-}
-
-/*
-	Returns if the given weapon is full auto.
-*/
-WeaponIsFullAuto( weap )
-{
-	weaptoks = strtok( weap, "_" );
+	ent = spawnstruct();
 	
-	assert( isdefined( weaptoks[ 0 ] ) );
-	assert( isstring( weaptoks[ 0 ] ) );
+	if ( isdefined( string1 ) )
+	{
+		self thread waittill_string( string1, ent );
+	}
 	
-	return isdefined( level.bots_fullautoguns[ weaptoks[ 0 ] ] );
+	if ( isdefined( string2 ) )
+	{
+		self thread waittill_string( string2, ent );
+	}
+	
+	if ( isdefined( string3 ) )
+	{
+		self thread waittill_string( string3, ent );
+	}
+	
+	if ( isdefined( string4 ) )
+	{
+		self thread waittill_string( string4, ent );
+	}
+	
+	if ( isdefined( string5 ) )
+	{
+		self thread waittill_string( string5, ent );
+	}
+	
+	ent thread _timeout( timeOut );
+	
+	ent waittill( "returned", msg );
+	ent notify( "die" );
+	return msg;
 }
 
 /*
-	If weap is a secondary gnade
+	Used for waittill_any_timeout
 */
-isSecondaryGrenade( gnade )
+_timeout( delay )
 {
-	return ( gnade == "concussion_grenade_mp" || gnade == "flash_grenade_mp" || gnade == "smoke_grenade_mp" );
+	self endon( "die" );
+	
+	wait( delay );
+	self notify( "returned", "timeout" );
+}
+
+/*
+	Returns if we have the create a class object unlocked.
+*/
+isItemUnlocked( what, lvl )
+{
+	switch ( what )
+	{
+		case "ak47":
+			return true;
+			
+		case "ak74u":
+			return ( lvl >= 28 );
+			
+		case "barrett":
+			return ( lvl >= 49 );
+			
+		case "dragunov":
+			return ( lvl >= 22 );
+			
+		case "g3":
+			return ( lvl >= 25 );
+			
+		case "g36c":
+			return ( lvl >= 37 );
+			
+		case "m1014":
+			return ( lvl >= 31 );
+			
+		case "m14":
+			return ( lvl >= 46 );
+			
+		case "m16":
+			return true;
+			
+		case "m21":
+			return ( lvl >= 7 );
+			
+		case "m4":
+			return ( lvl >= 10 );
+			
+		case "m40a3":
+			return true;
+			
+		case "m60e4":
+			return ( lvl >= 19 );
+			
+		case "mp44":
+			return ( lvl >= 52 );
+			
+		case "mp5":
+			return true;
+			
+		case "p90":
+			return ( lvl >= 40 );
+			
+		case "rpd":
+			return true;
+			
+		case "saw":
+			return true;
+			
+		case "skorpion":
+			return true;
+			
+		case "uzi":
+			return ( lvl >= 13 );
+			
+		case "winchester1200":
+			return true;
+			
+		case "remington700":
+			return ( lvl >= 34 );
+			
+		case "beretta":
+			return true;
+			
+		case "colt45":
+			return ( lvl >= 16 );
+			
+		case "deserteagle":
+			return ( lvl >= 43 );
+			
+		case "deserteaglegold":
+			return ( lvl >= 55 );
+			
+		case "usp":
+			return true;
+			
+		case "specialty_bulletdamage":
+			return true;
+			
+		case "specialty_armorvest":
+			return true;
+			
+		case "specialty_fastreload":
+			return ( lvl >= 20 );
+			
+		case "specialty_rof":
+			return ( lvl >= 29 );
+			
+		case "specialty_twoprimaries":
+			return ( lvl >= 38 );
+			
+		case "specialty_gpsjammer":
+			return ( lvl >= 11 );
+			
+		case "specialty_explosivedamage":
+			return true;
+			
+		case "specialty_longersprint":
+			return true;
+			
+		case "specialty_bulletaccuracy":
+			return true;
+			
+		case "specialty_pistoldeath":
+			return ( lvl >= 8 );
+			
+		case "specialty_grenadepulldeath":
+			return ( lvl >= 17 );
+			
+		case "specialty_bulletpenetration":
+			return true;
+			
+		case "specialty_holdbreath":
+			return ( lvl >= 26 );
+			
+		case "specialty_quieter":
+			return ( lvl >= 44 );
+			
+		case "specialty_parabolic":
+			return ( lvl >= 35 );
+			
+		case "specialty_specialgrenade":
+			return true;
+			
+		case "specialty_weapon_rpg":
+			return true;
+			
+		case "specialty_weapon_claymore":
+			return ( lvl >= 23 );
+			
+		case "specialty_fraggrenade":
+			return ( lvl >= 41 );
+			
+		case "specialty_extraammo":
+			return ( lvl >= 32 );
+			
+		case "specialty_detectexplosive":
+			return ( lvl >= 14 );
+			
+		case "specialty_weapon_c4":
+			return true;
+			
+		default:
+			return true;
+	}
+}
+
+/*
+	ModWarfare removes this func from _missions
+*/
+getweaponclass( weapon )
+{
+	tokens = strtok( weapon, "_" );
+	weaponClass = tablelookup( "mp/statstable.csv", 4, tokens[ 0 ], 2 );
+	
+	if ( ismg( weapon ) )
+	{
+		weaponClass = "weapon_mg";
+	}
+	
+	return weaponClass;
 }
 
 /*
@@ -817,132 +1053,47 @@ isWeaponDroppable( weap )
 }
 
 /*
-	Does a notify after a delay
+	Selects a random element from the array.
 */
-notifyAfterDelay( delay, not )
+random( arr )
 {
-	wait delay;
-	self notify( not );
-}
-
-/*
-	Returns a bot to be kicked
-*/
-getBotToKick()
-{
-	bots = getBotArray();
+	size = arr.size;
 	
-	if ( !isdefined( bots ) || !isdefined( bots.size ) || bots.size <= 0 || !isdefined( bots[ 0 ] ) )
+	if ( !size )
 	{
 		return undefined;
 	}
 	
-	tokick = undefined;
-	axis = 0;
-	allies = 0;
-	team = getdvar( "bots_team" );
+	return arr[ randomint( size ) ];
+}
+
+/*
+	Removes an item from the array.
+*/
+array_remove( ents, remover )
+{
+	newents = [];
 	
-	// count teams
-	for ( i = 0; i < bots.size; i++ )
+	for ( i = 0; i < ents.size; i++ )
 	{
-		bot = bots[ i ];
+		index = ents[ i ];
 		
-		if ( !isdefined( bot ) || !isdefined( bot.team ) )
+		if ( index != remover )
 		{
-			continue;
-		}
-		
-		if ( bot.team == "allies" )
-		{
-			allies++;
-		}
-		else if ( bot.team == "axis" )
-		{
-			axis++;
-		}
-		else // choose bots that are not on a team first
-		{
-			return bot;
+			newents[ newents.size ] = index;
 		}
 	}
 	
-	// search for a bot on the other team
-	if ( team == "custom" || team == "axis" )
-	{
-		team = "allies";
-	}
-	else if ( team == "autoassign" )
-	{
-		// get the team with the most bots
-		team = "allies";
-		
-		if ( axis > allies )
-		{
-			team = "axis";
-		}
-	}
-	else
-	{
-		team = "axis";
-	}
-	
-	// get the bot on this team with lowest skill
-	for ( i = 0; i < bots.size; i++ )
-	{
-		bot = bots[ i ];
-		
-		if ( !isdefined( bot ) || !isdefined( bot.team ) )
-		{
-			continue;
-		}
-		
-		if ( bot.team != team )
-		{
-			continue;
-		}
-		
-		if ( !isdefined( bot.pers ) || !isdefined( bot.pers[ "bots" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ][ "base" ] ) )
-		{
-			continue;
-		}
-		
-		if ( isdefined( tokick ) && bot.pers[ "bots" ][ "skill" ][ "base" ] > tokick.pers[ "bots" ][ "skill" ][ "base" ] )
-		{
-			continue;
-		}
-		
-		tokick = bot;
-	}
-	
-	if ( isdefined( tokick ) )
-	{
-		return tokick;
-	}
-	
-	// just kick lowest skill
-	for ( i = 0; i < bots.size; i++ )
-	{
-		bot = bots[ i ];
-		
-		if ( !isdefined( bot ) || !isdefined( bot.team ) )
-		{
-			continue;
-		}
-		
-		if ( !isdefined( bot.pers ) || !isdefined( bot.pers[ "bots" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ][ "base" ] ) )
-		{
-			continue;
-		}
-		
-		if ( isdefined( tokick ) && bot.pers[ "bots" ][ "skill" ][ "base" ] > tokick.pers[ "bots" ][ "skill" ][ "base" ] )
-		{
-			continue;
-		}
-		
-		tokick = bot;
-	}
-	
-	return tokick;
+	return newents;
+}
+
+/*
+	Waits until not or tim.
+*/
+waittill_notify_or_timeout( not, tim )
+{
+	self endon( not );
+	wait tim;
 }
 
 /*
@@ -977,46 +1128,14 @@ bot_wait_for_host()
 		wait 0.05;
 	}
 	
-	for ( i = getdvarfloat( "bots_main_waitForHostTime" ); i > 0; i -= 0.05 )
-	{
-		host = GetHostPlayer();
-		
-		if ( isdefined( host ) )
-		{
-			break;
-		}
-		
-		wait 0.05;
-	}
-	
 	if ( !isdefined( host ) )
 	{
 		return;
 	}
 	
-	for ( i = getdvarfloat( "bots_main_waitForHostTime" ); i > 0; i -= 0.05 )
-	{
-		if ( isdefined( host.pers[ "team" ] ) )
-		{
-			break;
-		}
-		
-		wait 0.05;
-	}
-	
 	if ( !isdefined( host.pers[ "team" ] ) )
 	{
 		return;
-	}
-	
-	for ( i = getdvarfloat( "bots_main_waitForHostTime" ); i > 0; i -= 0.05 )
-	{
-		if ( host.pers[ "team" ] == "allies" || host.pers[ "team" ] == "axis" )
-		{
-			break;
-		}
-		
-		wait 0.05;
 	}
 }
 
@@ -1106,7 +1225,7 @@ SmokeTrace( start, end, rad )
 }
 
 /*
-	Returns the cone dot (like fov, or distance from the center of our screen).
+	Returns the cone dot (like fov, or distance from the center of our screen). 1.0 = directly looking at, 0.0 = completely right angle, -1.0, completely 180
 */
 getConeDot( to, from, dir )
 {
@@ -1124,6 +1243,16 @@ distancesquared2D( to, from )
 	from = ( from[ 0 ], from[ 1 ], 0 );
 	
 	return distancesquared( to, from );
+}
+
+/*
+	converts a string into a float
+*/
+float_old( num )
+{
+	setdvar( "temp_dvar_bot_util", num );
+	
+	return getdvarfloat( "temp_dvar_bot_util" );
 }
 
 /*
@@ -1151,21 +1280,292 @@ Round( x )
 }
 
 /*
-	converts a string into a float
+	clamps angle between -180 and 180
 */
-float_old( num )
+angleclamp180( angle )
 {
-	setdvar( "temp_dvar_bot_util", num );
+	angleFrac = angle / 360.0;
+	angle = ( angleFrac - floor( angleFrac ) ) * 360.0;
 	
-	return getdvarfloat( "temp_dvar_bot_util" );
+	if ( angle > 180.0 )
+	{
+		return angle - 360.0;
+	}
+	
+	return angle;
 }
 
 /*
-	If the string starts with
+	Clamps between value
 */
-isStrStart( string1, subStr )
+clamp( a, minv, maxv )
 {
-	return ( getsubstr( string1, 0, subStr.size ) == subStr );
+	return max( min( a, maxv ), minv );
+}
+
+/*
+	Matches a num to a char
+*/
+keyCodeToString( a )
+{
+	b = "";
+	
+	switch ( a )
+	{
+		case 0:
+			b = "a";
+			break;
+			
+		case 1:
+			b = "b";
+			break;
+			
+		case 2:
+			b = "c";
+			break;
+			
+		case 3:
+			b = "d";
+			break;
+			
+		case 4:
+			b = "e";
+			break;
+			
+		case 5:
+			b = "f";
+			break;
+			
+		case 6:
+			b = "g";
+			break;
+			
+		case 7:
+			b = "h";
+			break;
+			
+		case 8:
+			b = "i";
+			break;
+			
+		case 9:
+			b = "j";
+			break;
+			
+		case 10:
+			b = "k";
+			break;
+			
+		case 11:
+			b = "l";
+			break;
+			
+		case 12:
+			b = "m";
+			break;
+			
+		case 13:
+			b = "n";
+			break;
+			
+		case 14:
+			b = "o";
+			break;
+			
+		case 15:
+			b = "p";
+			break;
+			
+		case 16:
+			b = "q";
+			break;
+			
+		case 17:
+			b = "r";
+			break;
+			
+		case 18:
+			b = "s";
+			break;
+			
+		case 19:
+			b = "t";
+			break;
+			
+		case 20:
+			b = "u";
+			break;
+			
+		case 21:
+			b = "v";
+			break;
+			
+		case 22:
+			b = "w";
+			break;
+			
+		case 23:
+			b = "x";
+			break;
+			
+		case 24:
+			b = "y";
+			break;
+			
+		case 25:
+			b = "z";
+			break;
+			
+		case 26:
+			b = ".";
+			break;
+			
+		case 27:
+			b = " ";
+			break;
+	}
+	
+	return b;
+}
+
+/*
+	Creates indexers for the create a class objects.
+*/
+cac_init_patch()
+{
+	// oldschool mode does not create these, we need those tho.
+	if ( !isdefined( level.tbl_weaponids ) )
+	{
+		level.tbl_weaponids = [];
+		
+		for ( i = 0; i < 150; i++ )
+		{
+			reference_s = tablelookup( "mp/statsTable.csv", 0, i, 4 );
+			
+			if ( reference_s != "" )
+			{
+				level.tbl_weaponids[ i ][ "reference" ] = reference_s;
+				level.tbl_weaponids[ i ][ "group" ] = tablelookup( "mp/statstable.csv", 0, i, 2 );
+				level.tbl_weaponids[ i ][ "count" ] = int( tablelookup( "mp/statstable.csv", 0, i, 5 ) );
+				level.tbl_weaponids[ i ][ "attachment" ] = tablelookup( "mp/statstable.csv", 0, i, 8 );
+			}
+			else
+			{
+				continue;
+			}
+		}
+	}
+	
+	if ( !isdefined( level.tbl_weaponattachment ) )
+	{
+		level.tbl_weaponattachment = [];
+		
+		for ( i = 0; i < 8; i++ )
+		{
+			level.tbl_weaponattachment[ i ][ "bitmask" ] = int( tablelookup( "mp/attachmentTable.csv", 9, i, 10 ) );
+			level.tbl_weaponattachment[ i ][ "reference" ] = tablelookup( "mp/attachmentTable.csv", 9, i, 4 );
+		}
+	}
+	
+	if ( !isdefined( level.tbl_perkdata ) )
+	{
+		level.tbl_perkdata = [];
+		
+		// generating perk data vars collected form statsTable.csv
+		for ( i = 150; i < 194; i++ )
+		{
+			reference_s = tablelookup( "mp/statsTable.csv", 0, i, 4 );
+			
+			if ( reference_s != "" )
+			{
+				level.tbl_perkdata[ i ][ "reference" ] = reference_s;
+				level.tbl_perkdata[ i ][ "reference_full" ] = tablelookup( "mp/statsTable.csv", 0, i, 6 );
+				level.tbl_perkdata[ i ][ "count" ] = int( tablelookup( "mp/statsTable.csv", 0, i, 5 ) );
+				level.tbl_perkdata[ i ][ "group" ] = tablelookup( "mp/statsTable.csv", 0, i, 2 );
+				level.tbl_perkdata[ i ][ "name" ] = tablelookupistring( "mp/statsTable.csv", 0, i, 3 );
+				level.tbl_perkdata[ i ][ "perk_num" ] = tablelookup( "mp/statsTable.csv", 0, i, 8 );
+			}
+			else
+			{
+				continue;
+			}
+		}
+	}
+	
+	level.perkreferencetoindex = [];
+	level.weaponreferencetoindex = [];
+	level.weaponattachmentreferencetoindex = [];
+	
+	for ( i = 0; i < 150; i++ )
+	{
+		if ( !isdefined( level.tbl_weaponids[ i ] ) || !isdefined( level.tbl_weaponids[ i ][ "reference" ] ) )
+		{
+			continue;
+		}
+		
+		level.weaponreferencetoindex[ level.tbl_weaponids[ i ][ "reference" ] ] = i;
+	}
+	
+	for ( i = 0; i < 8; i++ )
+	{
+		if ( !isdefined( level.tbl_weaponattachment[ i ] ) || !isdefined( level.tbl_weaponattachment[ i ][ "reference" ] ) )
+		{
+			continue;
+		}
+		
+		level.weaponattachmentreferencetoindex[ level.tbl_weaponattachment[ i ][ "reference" ] ] = i;
+	}
+	
+	for ( i = 150; i < 194; i++ )
+	{
+		if ( !isdefined( level.tbl_perkdata[ i ] ) || !isdefined( level.tbl_perkdata[ i ][ "reference_full" ] ) )
+		{
+			continue;
+		}
+		
+		level.perkreferencetoindex[ level.tbl_perkdata[ i ][ "reference_full" ] ] = i;
+	}
+}
+
+/*
+	Parse frontlines type waypoints
+*/
+FrontLinesWaypoints()
+{
+	waypoints = [];
+	
+	for ( i = 0;; i++ )
+	{
+		dvar_answer = getdvar( "flwp_" + i );
+		
+		if ( dvar_answer == "" || dvar_answer == "eof" )
+		{
+			break;
+		}
+		
+		toks = strtok( dvar_answer, "," );
+		
+		waypoint = spawnstruct();
+		wp_num = int( toks[ 0 ] );
+		x = float_old( toks[ 1 ] );
+		y = float_old( toks[ 2 ] );
+		z = float_old( toks[ 3 ] );
+		waypoint.origin = ( x, y, z );
+		
+		waypoint.type = toks[ 4 ];
+		waypoint.children = [];
+		
+		num_children = int( toks[ 5 ] );
+		
+		for ( h = 0; h < num_children; h++ )
+		{
+			waypoint.children[ waypoint.children.size ] = int( toks[ 6 + h ] );
+		}
+		
+		waypoints[ wp_num ] = waypoint;
+	}
+	
+	return waypoints;
 }
 
 /*
@@ -1203,78 +1603,55 @@ parseTokensIntoWaypoint( tokens )
 		}
 	}
 	
-	javStr = tokens[ 4 ];
-	
-	if ( isdefined( javStr ) && javStr != "" )
-	{
-		javToks = strtok( javStr, " " );
-		
-		if ( javToks.size >= 3 )
-		{
-			waypoint.jav_point = ( float_old( javToks[ 0 ] ), float_old( javToks[ 1 ] ), float_old( javToks[ 2 ] ) );
-		}
-	}
-	
 	return waypoint;
 }
 
 /*
-	Function to extract lines from a file specified by 'filename' and store them in a result structure.
+	Returns a bot's name to be used. Reads from botnames.txt
 */
-getWaypointLinesFromFile( filename )
+getABotName()
 {
-	// Create a structure to store the result, including an array to hold individual lines.
-	result = spawnstruct();
-	result.lines = [];
-	
-	// Read the entire content of the file into the 'waypointStr' variable.
-	// Note: max string length in GSC is 65535.
-	waypointStr = BotBuiltinFileRead( filename );
-	
-	// If the file is empty or not defined, return the empty result structure.
-	if ( !isdefined( waypointStr ) )
+	if ( !isdefined( level.bot_names ) )
 	{
-		return result;
-	}
-	
-	// Variables to track the current line's character count and starting position.
-	linecount = 0;
-	linestart = 0;
-	
-	// Iterate through each character in the 'waypointStr'.
-	for ( i = 0; i < waypointStr.size; i++ )
-	{
-		// Check for newline characters '\n' or '\r'.
-		if ( waypointStr[ i ] == "\n" || waypointStr[ i ] == "\r" )
+		level.bot_names = [];
+		
+		if ( getdvar( "temp_dvar_bot_name_cursor" ) == "" )
 		{
-			// Extract the current line using 'getsubstr' and store it in the result array.
-			result.lines[ result.lines.size ] = getsubstr( waypointStr, linestart, linestart + linecount );
-			
-			// If the newline is '\r\n', skip the next character.
-			if ( waypointStr[ i ] == "\r" && i < waypointStr.size - 1 && waypointStr[ i + 1 ] == "\n" )
-			{
-				i++;
-			}
-			
-			// Reset linecount and update linestart for the next line.
-			linecount = 0;
-			linestart = i + 1;
-			continue;
+			setdvar( "temp_dvar_bot_name_cursor", 0 );
 		}
 		
-		// Increment linecount for the current line.
-		linecount++;
+		filename = "botnames.txt";
+		
+		if ( BotBuiltinFileExists( filename ) )
+		{
+			f = BotBuiltinFileOpen( filename, "read" );
+			
+			if ( f > 0 )
+			{
+				for ( line = BotBuiltinReadLine( f ); isdefined( line ); line = BotBuiltinReadLine( f ) )
+				{
+					level.bot_names[ level.bot_names.size ] = line;
+				}
+				
+				BotBuiltinFileClose( f );
+			}
+		}
 	}
 	
-	// Store the last line (or the only line if there are no newline characters) in the result array.
-	result.lines[ result.lines.size ] = getsubstr( waypointStr, linestart, linestart + linecount );
+	if ( !level.bot_names.size )
+	{
+		return undefined;
+	}
 	
-	// Return the result structure containing the array of extracted lines.
-	return result;
+	cur = getdvarint( "temp_dvar_bot_name_cursor" );
+	name = level.bot_names[ cur % level.bot_names.size ];
+	setdvar( "temp_dvar_bot_name_cursor", cur + 1 );
+	
+	return name;
 }
 
 /*
-	Loads waypoints from file
+	Read from file a csv, and returns an array of waypoints
 */
 readWpsFromFile( mapname )
 {
@@ -1286,25 +1663,39 @@ readWpsFromFile( mapname )
 		return waypoints;
 	}
 	
-	res = getWaypointLinesFromFile( filename );
+	f = BotBuiltinFileOpen( filename, "read" );
 	
-	if ( !res.lines.size )
+	if ( f < 1 )
 	{
 		return waypoints;
 	}
 	
 	BotBuiltinPrintConsole( "Attempting to read waypoints from " + filename );
 	
-	waypointCount = int( res.lines[ 0 ] );
+	line = BotBuiltinReadLine( f );
 	
-	for ( i = 1; i <= waypointCount; i++ )
+	if ( isdefined( line ) )
 	{
-		tokens = strtok( res.lines[ i ], "," );
+		waypointCount = int( line );
 		
-		waypoint = parseTokensIntoWaypoint( tokens );
-		
-		waypoints[ i - 1 ] = waypoint;
+		for ( i = 1; i <= waypointCount; i++ )
+		{
+			line = BotBuiltinReadLine( f );
+			
+			if ( !isdefined( line ) )
+			{
+				break;
+			}
+			
+			tokens = strtok( line, "," );
+			
+			waypoint = parseTokensIntoWaypoint( tokens );
+			
+			waypoints[ i - 1 ] = waypoint;
+		}
 	}
+	
+	BotBuiltinFileClose( f );
 	
 	return waypoints;
 }
@@ -1314,6 +1705,8 @@ readWpsFromFile( mapname )
 */
 load_waypoints()
 {
+	mapname = getdvar( "mapname" );
+	
 	level.waypointusage = [];
 	level.waypointusage[ "allies" ] = [];
 	level.waypointusage[ "axis" ] = [];
@@ -1323,14 +1716,12 @@ load_waypoints()
 		level.waypoints = [];
 	}
 	
-	mapname = getdvar( "mapname" );
-	
 	wps = readWpsFromFile( mapname );
 	
 	if ( wps.size )
 	{
 		level.waypoints = wps;
-		BotBuiltinPrintConsole( "Loaded " + wps.size + " waypoints from csv" );
+		BotBuiltinPrintConsole( "Loaded " + wps.size + " waypoints from file." );
 	}
 	else
 	{
@@ -1343,7 +1734,17 @@ load_waypoints()
 		
 		if ( level.waypoints.size )
 		{
-			BotBuiltinPrintConsole( "Loaded " + level.waypoints.size + " waypoints from script" );
+			BotBuiltinPrintConsole( "Loaded " + level.waypoints.size + " waypoints from script." );
+		}
+	}
+	
+	if ( !level.waypoints.size )
+	{
+		level.waypoints = FrontLinesWaypoints();
+		
+		if ( level.waypoints.size )
+		{
+			BotBuiltinPrintConsole( "Loaded " + level.waypoints.size + " waypoints from frontlines." );
 		}
 	}
 	
@@ -1492,325 +1893,27 @@ getWaypointForIndex( i )
 }
 
 /*
-	Returns the friendly user name for a given map's codename
-*/
-getMapName( mapname )
-{
-	switch ( mapname )
-	{
-		case "mp_abandon":
-			return "Carnival";
-			
-		case "mp_rundown":
-			return "Rundown";
-			
-		case "mp_afghan":
-			return "Afghan";
-			
-		case "mp_boneyard":
-			return "Scrapyard";
-			
-		case "mp_brecourt":
-			return "Wasteland";
-			
-		case "mp_cargoship":
-			return "Wetwork";
-			
-		case "mp_checkpoint":
-			return "Karachi";
-			
-		case "mp_compact":
-			return "Salvage";
-			
-		case "mp_complex":
-			return "Bailout";
-			
-		case "mp_crash":
-			return "Crash";
-			
-		case "mp_cross_fire":
-			return "Crossfire";
-			
-		case "mp_derail":
-			return "Derail";
-			
-		case "mp_estate":
-			return "Estate";
-			
-		case "mp_favela":
-			return "Favela";
-			
-		case "mp_fuel2":
-			return "Fuel";
-			
-		case "mp_highrise":
-			return "Highrise";
-			
-		case "mp_invasion":
-			return "Invasion";
-			
-		case "mp_killhouse":
-			return "Killhouse";
-			
-		case "mp_nightshift":
-			return "Skidrow";
-			
-		case "mp_nuked":
-			return "Nuketown";
-			
-		case "oilrig":
-			return "Oilrig";
-			
-		case "mp_quarry":
-			return "Quarry";
-			
-		case "mp_rust":
-			return "Rust";
-			
-		case "mp_storm":
-			return "Storm";
-			
-		case "mp_strike":
-			return "Strike";
-			
-		case "mp_subbase":
-			return "Subbase";
-			
-		case "mp_terminal":
-			return "Terminal";
-			
-		case "mp_trailerpark":
-			return "Trailer Park";
-			
-		case "mp_overgrown":
-			return "Overgrown";
-			
-		case "mp_underpass":
-			return "Underpass";
-			
-		case "mp_vacant":
-			return "Vacant";
-			
-		case "iw4_credits":
-			return "IW4 Test Map";
-			
-		case "airport":
-			return "Airport";
-			
-		case "co_hunted":
-			return "Hunted";
-			
-		case "invasion":
-			return "Burgertown";
-			
-		case "mp_bloc":
-			return "Bloc";
-			
-		case "mp_bog_sh":
-			return "Bog";
-			
-		case "contingency":
-			return "Contingency";
-			
-		case "gulag":
-			return "Gulag";
-			
-		case "so_ghillies":
-			return "Pripyat";
-			
-		case "ending":
-			return "Museum";
-			
-		case "af_chase":
-			return "Afghan Chase";
-			
-		case "af_caves":
-			return "Afghan Caves";
-			
-		case "arcadia":
-			return "Arcadia";
-			
-		case "boneyard":
-			return "Boneyard";
-			
-		case "cliffhanger":
-			return "Cliffhanger";
-			
-		case "dcburning":
-			return "DCBurning";
-			
-		case "dcemp":
-			return "DCEMP";
-			
-		case "downtown":
-			return "Downtown";
-			
-		case "estate":
-			return "EstateSP";
-			
-		case "favela":
-			return "FavelaSP";
-			
-		case "favela_escape":
-			return "Favela Escape";
-			
-		case "roadkill":
-			return "Roadkill";
-			
-		case "trainer":
-			return "TH3 PIT";
-			
-		case "so_bridge":
-			return "Bridge";
-			
-		case "dc_whitehouse":
-			return "Whitehouse";
-			
-		case "mp_shipment_long":
-			return "ShipmentLong";
-			
-		case "mp_shipment":
-			return "Shipment";
-			
-		case "mp_firingrange":
-			return "Firing Range";
-			
-		case "mp_rust_long":
-			return "RustLong";
-			
-		case "mp_cargoship_sh":
-			return "Freighter";
-			
-		case "mp_storm_spring":
-			return "Chemical Plant";
-			
-		case "mp_crash_trop":
-		case "mp_crash_tropical":
-			return "Crash Tropical";
-			
-		case "mp_fav_tropical":
-			return "Favela Tropical";
-			
-		case "mp_estate_trop":
-		case "mp_estate_tropical":
-			return "Estate Tropical";
-			
-		case "mp_bloc_sh":
-			return "Forgotten City";
-			
-		default:
-			return mapname;
-	}
-}
-
-/*
 	Returns a good amount of players.
 */
 getGoodMapAmount()
 {
 	switch ( getdvar( "mapname" ) )
 	{
-		case "mp_rust":
-		case "iw4_credits":
-		case "mp_nuked":
-		case "oilrig":
-		case "mp_killhouse":
-		case "invasion":
-		case "mp_bog_sh":
-		case "co_hunted":
-		case "contingency":
-		case "gulag":
-		case "so_ghillies":
-		case "ending":
-		case "af_chase":
-		case "af_caves":
-		case "arcadia":
-		case "boneyard":
-		case "cliffhanger":
-		case "dcburning":
-		case "dcemp":
-		case "downtown":
-		case "estate":
-		case "favela":
-		case "favela_escape":
-		case "roadkill":
-		case "so_bridge":
-		case "trainer":
-		case "dc_whitehouse":
-		case "mp_shipment":
-		case "mp_countdown":
-		case "mp_showdown":
-		case "mp_farm":
-		case "mp_pipeline":
-			if ( level.teambased )
-			{
-				return 8;
-			}
-			else
-			{
-				return 4;
-			}
-			
-		case "mp_vacant":
-		case "mp_terminal":
-		case "mp_nightshift":
-		case "mp_favela":
-		case "mp_highrise":
-		case "mp_boneyard":
-		case "mp_subbase":
-		case "mp_firingrange":
-		case "mp_fav_tropical":
-		case "mp_shipment_long":
-		case "mp_rust_long":
-		case "mp_backlot":
-		case "mp_carentan":
-		case "mp_citystreets":
-		case "mp_hardhat":
-		case "mp_seatown":
-		case "mp_bravo":
-		case "mp_plaza2":
-		case "mp_alpha":
-		case "mp_dome":
-			if ( level.teambased )
-			{
-				return 12;
-			}
-			else
-			{
-				return 8;
-			}
-			
-		case "mp_afghan":
 		case "mp_crash":
-		case "mp_brecourt":
-		case "mp_cross_fire":
-		case "mp_overgrown":
-		case "mp_trailerpark":
-		case "mp_underpass":
-		case "mp_checkpoint":
-		case "mp_quarry":
-		case "mp_rundown":
-		case "mp_cargoship":
-		case "mp_estate":
-		case "mp_bloc":
-		case "mp_storm":
-		case "mp_strike":
-		case "mp_abandon":
-		case "mp_complex":
-		case "airport":
-		case "mp_storm_spring":
-		case "mp_crash_trop":
-		case "mp_cargoship_sh":
-		case "mp_estate_trop":
-		case "mp_compact":
-		case "mp_crash_tropical":
-		case "mp_estate_tropical":
-		case "mp_bloc_sh":
-		case "mp_broadcast":
-		case "mp_convoy":
 		case "mp_crash_snow":
-		case "mp_paris":
-		case "mp_village":
+		case "mp_countdown":
+		case "mp_carentan":
+		case "mp_creek":
+		case "mp_broadcast":
+		case "mp_cargoship":
+		case "mp_pipeline":
+		case "mp_overgrown":
+		case "mp_strike":
+		case "mp_farm":
+		case "mp_crossfire":
+		case "mp_backlot":
+		case "mp_convoy":
+		case "mp_bloc":
 			if ( level.teambased )
 			{
 				return 14;
@@ -1820,147 +1923,234 @@ getGoodMapAmount()
 				return 9;
 			}
 			
-		case "mp_fuel2":
-		case "mp_invasion":
-		case "mp_derail":
-		case "mp_underground":
+		case "mp_vacant":
+		case "mp_showdown":
+		case "mp_citystreets":
+		case "mp_bog":
 			if ( level.teambased )
 			{
-				return 16;
+				return 12;
 			}
 			else
 			{
-				return 10;
+				return 8;
 			}
 			
-		default:
-			return 8;
+		case "mp_killhouse":
+		case "mp_shipment":
+			if ( level.teambased )
+			{
+				return 8;
+			}
+			else
+			{
+				return 4;
+			}
 	}
+	
+	return 2;
 }
 
 /*
-	Matches a num to a char
+	Returns the friendly user name for a given map's codename
 */
-keyCodeToString( a )
+getMapName( map )
 {
-	b = "";
-	
-	switch ( a )
+	switch ( map )
 	{
-		case 0:
-			b = "a";
-			break;
+		case "mp_convoy":
+			return "Ambush";
 			
-		case 1:
-			b = "b";
-			break;
+		case "mp_backlot":
+			return "Backlot";
 			
-		case 2:
-			b = "c";
-			break;
+		case "mp_bloc":
+			return "Bloc";
 			
-		case 3:
-			b = "d";
-			break;
+		case "mp_bog":
+			return "Bog";
 			
-		case 4:
-			b = "e";
-			break;
+		case "mp_countdown":
+			return "Countdown";
 			
-		case 5:
-			b = "f";
-			break;
+		case "mp_crash":
+			return "Crash";
 			
-		case 6:
-			b = "g";
-			break;
+		case "mp_crash_snow":
+			return "Winter Crash";
 			
-		case 7:
-			b = "h";
-			break;
+		case "mp_crossfire":
+			return "Crossfire";
 			
-		case 8:
-			b = "i";
-			break;
+		case "mp_citystreets":
+			return "District";
 			
-		case 9:
-			b = "j";
-			break;
+		case "mp_farm":
+			return "Downpour";
 			
-		case 10:
-			b = "k";
-			break;
+		case "mp_overgrown":
+			return "Overgrown";
 			
-		case 11:
-			b = "l";
-			break;
+		case "mp_pipeline":
+			return "Pipeline";
 			
-		case 12:
-			b = "m";
-			break;
+		case "mp_shipment":
+			return "Shipment";
 			
-		case 13:
-			b = "n";
-			break;
+		case "mp_showdown":
+			return "Showdown";
 			
-		case 14:
-			b = "o";
-			break;
+		case "mp_strike":
+			return "Strike";
 			
-		case 15:
-			b = "p";
-			break;
+		case "mp_vacant":
+			return "Vacant";
 			
-		case 16:
-			b = "q";
-			break;
+		case "mp_cargoship":
+			return "Wetwork";
 			
-		case 17:
-			b = "r";
-			break;
+		case "mp_broadcast":
+			return "Broadcast";
 			
-		case 18:
-			b = "s";
-			break;
+		case "mp_creek":
+			return "Creek";
 			
-		case 19:
-			b = "t";
-			break;
+		case "mp_carentan":
+			return "Chinatown";
 			
-		case 20:
-			b = "u";
-			break;
-			
-		case 21:
-			b = "v";
-			break;
-			
-		case 22:
-			b = "w";
-			break;
-			
-		case 23:
-			b = "x";
-			break;
-			
-		case 24:
-			b = "y";
-			break;
-			
-		case 25:
-			b = "z";
-			break;
-			
-		case 26:
-			b = ".";
-			break;
-			
-		case 27:
-			b = " ";
-			break;
+		case "mp_killhouse":
+			return "Killhouse";
 	}
 	
-	return b;
+	return map;
+}
+
+/*
+	Does the extra check when adding bots
+*/
+doExtraCheck()
+{
+	maps\mp\bots\_bot_internal::checkTheBots();
+}
+
+/*
+	Returns a bot to be kicked
+*/
+getBotToKick()
+{
+	bots = getBotArray();
+	
+	if ( !isdefined( bots ) || !isdefined( bots.size ) || bots.size <= 0 || !isdefined( bots[ 0 ] ) )
+	{
+		return undefined;
+	}
+	
+	tokick = undefined;
+	axis = 0;
+	allies = 0;
+	team = getdvar( "bots_team" );
+	
+	// count teams
+	for ( i = 0; i < bots.size; i++ )
+	{
+		bot = bots[ i ];
+		
+		if ( !isdefined( bot ) || !isdefined( bot.team ) )
+		{
+			continue;
+		}
+		
+		if ( bot.team == "allies" )
+		{
+			allies++;
+		}
+		else if ( bot.team == "axis" )
+		{
+			axis++;
+		}
+		else // choose bots that are not on a team first
+		{
+			return bot;
+		}
+	}
+	
+	// search for a bot on the other team
+	if ( team == "custom" || team == "axis" )
+	{
+		team = "allies";
+	}
+	else if ( team == "autoassign" )
+	{
+		// get the team with the most bots
+		team = "allies";
+		
+		if ( axis > allies )
+		{
+			team = "axis";
+		}
+	}
+	else
+	{
+		team = "axis";
+	}
+	
+	// get the bot on this team with lowest skill
+	for ( i = 0; i < bots.size; i++ )
+	{
+		bot = bots[ i ];
+		
+		if ( !isdefined( bot ) || !isdefined( bot.team ) )
+		{
+			continue;
+		}
+		
+		if ( bot.team != team )
+		{
+			continue;
+		}
+		
+		if ( !isdefined( bot.pers ) || !isdefined( bot.pers[ "bots" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ][ "base" ] ) )
+		{
+			continue;
+		}
+		
+		if ( isdefined( tokick ) && bot.pers[ "bots" ][ "skill" ][ "base" ] > tokick.pers[ "bots" ][ "skill" ][ "base" ] )
+		{
+			continue;
+		}
+		
+		tokick = bot;
+	}
+	
+	if ( isdefined( tokick ) )
+	{
+		return tokick;
+	}
+	
+	// just kick lowest skill
+	for ( i = 0; i < bots.size; i++ )
+	{
+		bot = bots[ i ];
+		
+		if ( !isdefined( bot ) || !isdefined( bot.team ) )
+		{
+			continue;
+		}
+		
+		if ( !isdefined( bot.pers ) || !isdefined( bot.pers[ "bots" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ] ) || !isdefined( bot.pers[ "bots" ][ "skill" ][ "base" ] ) )
+		{
+			continue;
+		}
+		
+		if ( isdefined( tokick ) && bot.pers[ "bots" ][ "skill" ][ "base" ] > tokick.pers[ "bots" ][ "skill" ][ "base" ] )
+		{
+			continue;
+		}
+		
+		tokick = bot;
+	}
+	
+	return tokick;
 }
 
 /*
@@ -2284,7 +2474,6 @@ Rectdistancesquared( origin )
 		dy = origin[ 1 ] - self.y1;
 	}
 	
-	
 	if ( origin[ 2 ] < self.z0 )
 	{
 		dz = origin[ 2 ] - self.z0;
@@ -2295,14 +2484,6 @@ Rectdistancesquared( origin )
 	}
 	
 	return dx * dx + dy * dy + dz * dz;
-}
-
-/*
-	Does the extra check when adding bots
-*/
-doExtraCheck()
-{
-	maps\mp\bots\_bot_internal::checkTheBots();
 }
 
 /*
@@ -2477,7 +2658,7 @@ RemoveWaypointUsage( wp, team )
 	{
 		return;
 	}
-	
+
 	wpstr = wp + "";
 	
 	if ( !isdefined( level.waypointusage[ team ][ wpstr ] ) )
@@ -2496,7 +2677,7 @@ RemoveWaypointUsage( wp, team )
 /*
 	Will linearly search for the nearest waypoint to pos that has a direct line of sight.
 */
-getNearestWaypointWithSight( pos )
+GetNearestWaypointWithSight( pos )
 {
 	candidate = undefined;
 	dist = 2147483647;
@@ -2569,7 +2750,7 @@ AStarSearch( start, goal, team, greedy_path )
 	
 	if ( !bullettracepassed( start + ( 0, 0, 15 ), level.waypoints[ startWp ].origin + ( 0, 0, 15 ), false, undefined ) )
 	{
-		_startwp = getNearestWaypointWithSight( start );
+		_startwp = GetNearestWaypointWithSight( start );
 	}
 	
 	if ( isdefined( _startwp ) )
@@ -2589,7 +2770,7 @@ AStarSearch( start, goal, team, greedy_path )
 	
 	if ( !bullettracepassed( goal + ( 0, 0, 15 ), level.waypoints[ goalWp ].origin + ( 0, 0, 15 ), false, undefined ) )
 	{
-		_goalwp = getNearestWaypointWithSight( goal );
+		_goalwp = GetNearestWaypointWithSight( goal );
 	}
 	
 	if ( isdefined( _goalwp ) )
@@ -2627,7 +2808,7 @@ AStarSearch( start, goal, team, greedy_path )
 			while ( isdefined( bestNode ) )
 			{
 				bestNodeStr = bestNode.index + "";
-				
+
 				if ( isdefined( team ) && isdefined( level.waypointusage ) )
 				{
 					if ( !isdefined( level.waypointusage[ team ][ bestNodeStr ] ) )
@@ -2738,6 +2919,61 @@ AStarSearch( start, goal, team, greedy_path )
 }
 
 /*
+	Returns the natural log of x using harmonic series.
+*/
+Log( x )
+{
+	// thanks Bob__ at stackoverflow
+	old_sum = 0.0;
+	xmlxpl = ( x - 1 ) / ( x + 1 );
+	xmlxpl_2 = xmlxpl * xmlxpl;
+	denom = 1.0;
+	frac = xmlxpl;
+	sum = frac;
+	
+	while ( sum != old_sum )
+	{
+		old_sum = sum;
+		denom += 2.0;
+		frac *= xmlxpl_2;
+		sum += frac / denom;
+	}
+	
+	answer = 2.0 * sum;
+	return answer;
+}
+
+/*
+	Taken from t5 gsc.
+*/
+array_combine( array1, array2 )
+{
+	if ( !array1.size )
+	{
+		return array2;
+	}
+	
+	array3 = [];
+	keys = getarraykeys( array1 );
+	
+	for ( i = 0; i < keys.size; i++ )
+	{
+		key = keys[ i ];
+		array3[ array3.size ] = array1[ key ];
+	}
+	
+	keys = getarraykeys( array2 );
+	
+	for ( i = 0; i < keys.size; i++ )
+	{
+		key = keys[ i ];
+		array3[ array3.size ] = array2[ key ];
+	}
+	
+	return array3;
+}
+
+/*
 	Taken from t5 gsc.
 	Returns an array of number's average.
 */
@@ -2796,7 +3032,7 @@ random_normal_distribution( mean, std_deviation, lower_bound, upper_bound )
 		w = x1 * x1 + x2 * x2;
 	}
 	
-	w = sqrt( ( -2.0 * log( w ) ) / w );
+	w = sqrt( ( -2.0 * Log( w ) ) / w );
 	y1 = x1 * w;
 	number = mean + y1 * std_deviation;
 	
@@ -2814,7 +3050,7 @@ random_normal_distribution( mean, std_deviation, lower_bound, upper_bound )
 }
 
 /*
-	Patches the plant sites so it exposes the defuseObject
+	We patch the bomb planted for sd so we have access to defuseObject.
 */
 onUsePlantObjectFix( player )
 {
@@ -2822,7 +3058,7 @@ onUsePlantObjectFix( player )
 	if ( !self maps\mp\gametypes\_gameobjects::isfriendlyteam( player.pers[ "team" ] ) )
 	{
 		level thread bombPlantedFix( self, player );
-		// player logstring( "bomb planted: " + self.label );
+		player logstring( "bomb planted: " + self.label );
 		
 		// disable all bomb zones except this one
 		for ( index = 0; index < level.bombzones.size; index++ )
@@ -2838,32 +3074,27 @@ onUsePlantObjectFix( player )
 		player playsound( "mp_bomb_plant" );
 		player notify ( "bomb_planted" );
 		
-		// if ( !level.hardcoremode )
-		//	iprintln( &"MP_EXPLOSIVES_PLANTED_BY", player );
+		if ( !level.hardcoremode )
+		{
+			iprintln( &"MP_EXPLOSIVES_PLANTED_BY", player );
+		}
 		
-		leaderdialog( "bomb_planted" );
+		maps\mp\gametypes\_globallogic::leaderdialog( "bomb_planted" );
 		
-		level thread teamplayercardsplash( "callout_bombplanted", player );
-		
-		level.bombowner = player;
-		player thread maps\mp\gametypes\_hud_message::splashnotify( "plant", maps\mp\gametypes\_rank::getscoreinfovalue( "plant" ) );
-		player thread maps\mp\gametypes\_rank::giverankxp( "plant" );
-		player.bombplantedtime = gettime();
-		maps\mp\gametypes\_gamescore::giveplayerscore( "plant", player );
-		player incplayerstat( "bombsplanted", 1 );
-		player thread maps\mp\_matchdata::loggameevent( "plant", player.origin );
+		maps\mp\gametypes\_globallogic::giveplayerscore( "plant", player );
+		player thread [[ level.onxpevent ]]( "plant" );
 	}
 }
 
 /*
-	Patches the plant sites so it exposes the defuseObject
+	We patch the bomb planted for sd so we have access to defuseObject.
 */
 bombPlantedFix( destroyedObj, player )
 {
-	maps\mp\gametypes\_gamelogic::pausetimer();
+	maps\mp\gametypes\_globallogic::pausetimer();
 	level.bombplanted = true;
 	
-	destroyedObj.visuals[ 0 ] thread maps\mp\gametypes\_gamelogic::playtickingsound();
+	destroyedObj.visuals[ 0 ] thread maps\mp\gametypes\_globallogic::playtickingsound();
 	level.tickingobject = destroyedObj.visuals[ 0 ];
 	
 	level.timelimitoverride = true;
@@ -2891,7 +3122,7 @@ bombPlantedFix( destroyedObj, player )
 		
 		tempAngle = randomfloat( 360 );
 		forward = ( cos( tempAngle ), sin( tempAngle ), 0 );
-		forward = vectornormalize( forward - vector_multiply( trace[ "normal" ], vectordot( forward, trace[ "normal" ] ) ) );
+		forward = vectornormalize( forward - vector_scale( trace[ "normal" ], vectordot( forward, trace[ "normal" ] ) ) );
 		dropAngles = vectortoangles( forward );
 		
 		level.sdbombmodel = spawn( "script_model", trace[ "position" ] );
@@ -2919,8 +3150,8 @@ bombPlantedFix( destroyedObj, player )
 	defuseObject maps\mp\gametypes\_gameobjects::setusetext( &"MP_DEFUSING_EXPLOSIVE" );
 	defuseObject maps\mp\gametypes\_gameobjects::setusehinttext( &"PLATFORM_HOLD_TO_DEFUSE_EXPLOSIVES" );
 	defuseObject maps\mp\gametypes\_gameobjects::setvisibleteam( "any" );
-	defuseObject maps\mp\gametypes\_gameobjects::set2dicon( "friendly", "waypoint_defuse" + label );
-	defuseObject maps\mp\gametypes\_gameobjects::set2dicon( "enemy", "waypoint_defend" + label );
+	defuseObject maps\mp\gametypes\_gameobjects::set2dicon( "friendly", "compass_waypoint_defuse" + label );
+	defuseObject maps\mp\gametypes\_gameobjects::set2dicon( "enemy", "compass_waypoint_defend" + label );
 	defuseObject maps\mp\gametypes\_gameobjects::set3dicon( "friendly", "waypoint_defuse" + label );
 	defuseObject maps\mp\gametypes\_gameobjects::set3dicon( "enemy", "waypoint_defend" + label );
 	defuseObject.label = label;
@@ -2934,7 +3165,7 @@ bombPlantedFix( destroyedObj, player )
 	maps\mp\gametypes\sd::bombtimerwait();
 	setdvar( "ui_bomb_timer", 0 );
 	
-	destroyedObj.visuals[ 0 ] maps\mp\gametypes\_gamelogic::stoptickingsound();
+	destroyedObj.visuals[ 0 ] maps\mp\gametypes\_globallogic::stoptickingsound();
 	
 	if ( level.gameended || level.bombdefused )
 	{
@@ -2949,7 +3180,6 @@ bombPlantedFix( destroyedObj, player )
 	if ( isdefined( player ) )
 	{
 		destroyedObj.visuals[ 0 ] radiusdamage( explosionOrigin, 512, 200, 20, player );
-		player incplayerstat( "targetsdestroyed", 1 );
 	}
 	else
 	{
@@ -2960,10 +3190,7 @@ bombPlantedFix( destroyedObj, player )
 	explosionEffect = spawnfx( level._effect[ "bombexplosion" ], explosionOrigin + ( 0, 0, 50 ), ( 0, 0, 1 ), ( cos( rot ), sin( rot ), 0 ) );
 	triggerfx( explosionEffect );
 	
-	playrumbleonposition( "grenade_rumble", explosionOrigin );
-	earthquake( 0.75, 2.0, explosionOrigin, 2000 );
-	
-	thread playsoundinspace( "exp_suitcase_bomb_main", explosionOrigin );
+	thread maps\mp\gametypes\sd::playsoundinspace( "exp_suitcase_bomb_main", explosionOrigin );
 	
 	if ( isdefined( destroyedObj.exploderindex ) )
 	{
@@ -2982,575 +3209,4 @@ bombPlantedFix( destroyedObj, player )
 	wait 3;
 	
 	maps\mp\gametypes\sd::sd_endgame( game[ "attackers" ], game[ "strings" ][ "target_destroyed" ] );
-}
-
-
-/*
-	Patches giveLoadout so that it doesn't use IsItemUnlocked
-*/
-botGiveLoadout( team, class, allowCopycat )
-{
-	self endon( "death" );
-	
-	self takeallweapons();
-	
-	primaryIndex = 0;
-	
-	// initialize specialty array
-	self.specialty = [];
-	
-	if ( !isdefined( allowCopycat ) )
-	{
-		allowCopycat = true;
-	}
-	
-	primaryWeapon = undefined;
-	
-	if ( isdefined( self.pers[ "copyCatLoadout" ] ) && self.pers[ "copyCatLoadout" ][ "inUse" ] && allowCopycat )
-	{
-		self maps\mp\gametypes\_class::setclass( "copycat" );
-		self.class_num = maps\mp\gametypes\_class::getclassindex( "copycat" );
-		
-		clonedLoadout = self.pers[ "copyCatLoadout" ];
-		
-		loadoutPrimary = clonedLoadout[ "loadoutPrimary" ];
-		loadoutPrimaryAttachment = clonedLoadout[ "loadoutPrimaryAttachment" ];
-		loadoutPrimaryAttachment2 = clonedLoadout[ "loadoutPrimaryAttachment2" ] ;
-		loadoutPrimaryCamo = clonedLoadout[ "loadoutPrimaryCamo" ];
-		loadoutSecondary = clonedLoadout[ "loadoutSecondary" ];
-		loadoutSecondaryAttachment = clonedLoadout[ "loadoutSecondaryAttachment" ];
-		loadoutSecondaryAttachment2 = clonedLoadout[ "loadoutSecondaryAttachment2" ];
-		loadoutSecondaryCamo = clonedLoadout[ "loadoutSecondaryCamo" ];
-		loadoutEquipment = clonedLoadout[ "loadoutEquipment" ];
-		loadoutPerk1 = clonedLoadout[ "loadoutPerk1" ];
-		loadoutPerk2 = clonedLoadout[ "loadoutPerk2" ];
-		loadoutPerk3 = clonedLoadout[ "loadoutPerk3" ];
-		loadoutOffhand = clonedLoadout[ "loadoutOffhand" ];
-		loadoutDeathStreak = "specialty_copycat";
-	}
-	else if ( issubstr( class, "custom" ) )
-	{
-		class_num = maps\mp\gametypes\_class::getclassindex( class );
-		self.class_num = class_num;
-		
-		loadoutPrimary = maps\mp\gametypes\_class::cac_getweapon( class_num, 0 );
-		loadoutPrimaryAttachment = maps\mp\gametypes\_class::cac_getweaponattachment( class_num, 0 );
-		loadoutPrimaryAttachment2 = maps\mp\gametypes\_class::cac_getweaponattachmenttwo( class_num, 0 );
-		loadoutPrimaryCamo = maps\mp\gametypes\_class::cac_getweaponcamo( class_num, 0 );
-		loadoutSecondaryCamo = maps\mp\gametypes\_class::cac_getweaponcamo( class_num, 1 );
-		loadoutSecondary = maps\mp\gametypes\_class::cac_getweapon( class_num, 1 );
-		loadoutSecondaryAttachment = maps\mp\gametypes\_class::cac_getweaponattachment( class_num, 1 );
-		loadoutSecondaryAttachment2 = maps\mp\gametypes\_class::cac_getweaponattachmenttwo( class_num, 1 );
-		loadoutSecondaryCamo = maps\mp\gametypes\_class::cac_getweaponcamo( class_num, 1 );
-		loadoutEquipment = maps\mp\gametypes\_class::cac_getperk( class_num, 0 );
-		loadoutPerk1 = maps\mp\gametypes\_class::cac_getperk( class_num, 1 );
-		loadoutPerk2 = maps\mp\gametypes\_class::cac_getperk( class_num, 2 );
-		loadoutPerk3 = maps\mp\gametypes\_class::cac_getperk( class_num, 3 );
-		loadoutOffhand = maps\mp\gametypes\_class::cac_getoffhand( class_num );
-		loadoutDeathStreak = maps\mp\gametypes\_class::cac_getdeathstreak( class_num );
-	}
-	else
-	{
-		class_num = maps\mp\gametypes\_class::getclassindex( class );
-		self.class_num = class_num;
-		
-		loadoutPrimary = maps\mp\gametypes\_class::table_getweapon( level.classtablename, class_num, 0 );
-		loadoutPrimaryAttachment = maps\mp\gametypes\_class::table_getweaponattachment( level.classtablename, class_num, 0, 0 );
-		loadoutPrimaryAttachment2 = maps\mp\gametypes\_class::table_getweaponattachment( level.classtablename, class_num, 0, 1 );
-		loadoutPrimaryCamo = maps\mp\gametypes\_class::table_getweaponcamo( level.classtablename, class_num, 0 );
-		loadoutSecondaryCamo = maps\mp\gametypes\_class::table_getweaponcamo( level.classtablename, class_num, 1 );
-		loadoutSecondary = maps\mp\gametypes\_class::table_getweapon( level.classtablename, class_num, 1 );
-		loadoutSecondaryAttachment = maps\mp\gametypes\_class::table_getweaponattachment( level.classtablename, class_num, 1, 0 );
-		loadoutSecondaryAttachment2 = maps\mp\gametypes\_class::table_getweaponattachment( level.classtablename, class_num, 1, 1 );;
-		loadoutSecondaryCamo = maps\mp\gametypes\_class::table_getweaponcamo( level.classtablename, class_num, 1 );
-		loadoutEquipment = maps\mp\gametypes\_class::table_getequipment( level.classtablename, class_num, 0 );
-		loadoutPerk1 = maps\mp\gametypes\_class::table_getperk( level.classtablename, class_num, 1 );
-		loadoutPerk2 = maps\mp\gametypes\_class::table_getperk( level.classtablename, class_num, 2 );
-		loadoutPerk3 = maps\mp\gametypes\_class::table_getperk( level.classtablename, class_num, 3 );
-		loadoutOffhand = maps\mp\gametypes\_class::table_getoffhand( level.classtablename, class_num );
-		loadoutDeathStreak = maps\mp\gametypes\_class::table_getdeathstreak( level.classtablename, class_num );
-	}
-	
-	if ( loadoutPerk1 != "specialty_bling" )
-	{
-		loadoutPrimaryAttachment2 = "none";
-		loadoutSecondaryAttachment2 = "none";
-	}
-	
-	if ( loadoutPerk1 != "specialty_onemanarmy" && loadoutSecondary == "onemanarmy" )
-	{
-		loadoutSecondary = maps\mp\gametypes\_class::table_getweapon( level.classtablename, 10, 1 );
-	}
-	
-	// loadoutSecondaryCamo = "none";
-	
-	// stop default class op'ness
-	allowOp = ( getdvarint( "bots_loadout_allow_op" ) >= 1 );
-	
-	if ( !allowOp )
-	{
-		loadoutDeathStreak = "specialty_null";
-		
-		if ( loadoutPrimary == "riotshield" )
-		{
-			loadoutPrimary = "m4";
-		}
-		
-		if ( loadoutSecondary == "at4" )
-		{
-			loadoutSecondary = "usp";
-		}
-		
-		if ( loadoutPrimaryAttachment == "gl" )
-		{
-			loadoutPrimaryAttachment = "none";
-		}
-		
-		if ( loadoutPerk2 == "specialty_coldblooded" )
-		{
-			loadoutPerk2 = "specialty_null";
-		}
-		
-		if ( loadoutPerk3 == "specialty_localjammer" )
-		{
-			loadoutPerk3 = "specialty_null";
-		}
-	}
-	
-	
-	if ( level.killstreakrewards )
-	{
-		if ( getdvarint( "scr_classic" ) == 1 )
-		{
-			loadoutKillstreak1 = "uav";
-			loadoutKillstreak2 = "precision_airstrike";
-			loadoutKillstreak3 = "helicopter";
-		}
-		else
-		{
-			loadoutKillstreak1 = self getplayerdata( "killstreaks", 0 );
-			loadoutKillstreak2 = self getplayerdata( "killstreaks", 1 );
-			loadoutKillstreak3 = self getplayerdata( "killstreaks", 2 );
-		}
-	}
-	else
-	{
-		loadoutKillstreak1 = "none";
-		loadoutKillstreak2 = "none";
-		loadoutKillstreak3 = "none";
-	}
-	
-	secondaryName = maps\mp\gametypes\_class::buildweaponname( loadoutSecondary, loadoutSecondaryAttachment, loadoutSecondaryAttachment2 );
-	self _giveweapon( secondaryName, int( tablelookup( "mp/camoTable.csv", 1, loadoutSecondaryCamo, 0 ) ) );
-	
-	self.loadoutprimarycamo = int( tablelookup( "mp/camoTable.csv", 1, loadoutPrimaryCamo, 0 ) );
-	self.loadoutprimary = loadoutPrimary;
-	self.loadoutsecondary = loadoutSecondary;
-	self.loadoutsecondarycamo = int( tablelookup( "mp/camoTable.csv", 1, loadoutSecondaryCamo, 0 ) );
-	
-	self setoffhandprimaryclass( "other" );
-	
-	// Action Slots
-	// self _setactionslot( 1, "" );
-	self _setactionslot( 1, "nightvision" );
-	self _setactionslot( 3, "altMode" );
-	self _setactionslot( 4, "" );
-	
-	// Perks
-	self _clearperks();
-	self maps\mp\gametypes\_class::_detachall();
-	
-	// these special case giving pistol death have to come before
-	// perk loadout to ensure player perk icons arent overwritten
-	if ( level.diehardmode )
-	{
-		self maps\mp\perks\_perks::giveperk( "specialty_pistoldeath" );
-	}
-	
-	// only give the deathstreak for the initial spawn for this life.
-	if ( loadoutDeathStreak != "specialty_null" && ( gettime() - self.spawntime ) < 0.1 )
-	{
-		deathVal = int( tablelookup( "mp/perkTable.csv", 1, loadoutDeathStreak, 6 ) );
-		
-		if ( self botGetPerkUpgrade( loadoutPerk1 ) == "specialty_rollover" || self botGetPerkUpgrade( loadoutPerk2 ) == "specialty_rollover" || self botGetPerkUpgrade( loadoutPerk3 ) == "specialty_rollover" )
-		{
-			deathVal -= 1;
-		}
-		
-		if ( self.pers[ "cur_death_streak" ] == deathVal )
-		{
-			self thread maps\mp\perks\_perks::giveperk( loadoutDeathStreak );
-			self thread maps\mp\gametypes\_hud_message::splashnotify( loadoutDeathStreak );
-		}
-		else if ( self.pers[ "cur_death_streak" ] > deathVal )
-		{
-			self thread maps\mp\perks\_perks::giveperk( loadoutDeathStreak );
-		}
-	}
-	
-	self botLoadoutAllPerks( loadoutEquipment, loadoutPerk1, loadoutPerk2, loadoutPerk3 );
-	
-	self maps\mp\gametypes\_class::setkillstreaks( loadoutKillstreak1, loadoutKillstreak2, loadoutKillstreak3 );
-	
-	if ( self hasperk( "specialty_extraammo", true ) && getweaponclass( secondaryName ) != "weapon_projectile" )
-	{
-		self givemaxammo( secondaryName );
-	}
-	
-	// Primary Weapon
-	primaryName = maps\mp\gametypes\_class::buildweaponname( loadoutPrimary, loadoutPrimaryAttachment, loadoutPrimaryAttachment2 );
-	self _giveweapon( primaryName, self.loadoutprimarycamo );
-	
-	// fix changing from a riotshield class to a riotshield class during grace period not giving a shield
-	if ( primaryName == "riotshield_mp" && level.ingraceperiod )
-	{
-		self notify ( "weapon_change", "riotshield_mp" );
-	}
-	
-	if ( self hasperk( "specialty_extraammo", true ) )
-	{
-		self givemaxammo( primaryName );
-	}
-	
-	self setspawnweapon( primaryName );
-	
-	primaryTokens = strtok( primaryName, "_" );
-	self.pers[ "primaryWeapon" ] = primaryTokens[ 0 ];
-	
-	// Primary Offhand was given by giveperk (it's your perk1)
-	
-	// Secondary Offhand
-	offhandSecondaryWeapon = loadoutOffhand + "_mp";
-	
-	if ( loadoutOffhand == "flash_grenade" )
-	{
-		self setoffhandsecondaryclass( "flash" );
-	}
-	else
-	{
-		self setoffhandsecondaryclass( "smoke" );
-	}
-	
-	self giveweapon( offhandSecondaryWeapon );
-	
-	if ( loadoutOffhand == "smoke_grenade" )
-	{
-		self setweaponammoclip( offhandSecondaryWeapon, 1 );
-	}
-	else if ( loadoutOffhand == "flash_grenade" )
-	{
-		self setweaponammoclip( offhandSecondaryWeapon, 2 );
-	}
-	else if ( loadoutOffhand == "concussion_grenade" )
-	{
-		self setweaponammoclip( offhandSecondaryWeapon, 2 );
-	}
-	else
-	{
-		self setweaponammoclip( offhandSecondaryWeapon, 1 );
-	}
-	
-	primaryWeapon = primaryName;
-	self.primaryweapon = primaryWeapon;
-	self.secondaryweapon = secondaryName;
-	
-	self botPlayerModelForWeapon( self.pers[ "primaryWeapon" ], getbaseweaponname( secondaryName ) );
-	
-	self.issniper = ( weaponclass( self.primaryweapon ) == "sniper" );
-	
-	self maps\mp\gametypes\_weapons::updatemovespeedscale( "primary" );
-	
-	// cac specialties that require loop threads
-	self maps\mp\perks\_perks::cac_selector();
-	
-	self notify ( "changed_kit" );
-	self notify( "bot_giveLoadout", allowCopycat );
-}
-
-/*
-	Patches giveLoadout so that it doesn't use IsItemUnlocked
-*/
-botGetPerkUpgrade( perkName )
-{
-	perkUpgrade = tablelookup( "mp/perktable.csv", 1, perkName, 8 );
-	
-	if ( perkUpgrade == "" || perkUpgrade == "specialty_null" )
-	{
-		return "specialty_null";
-	}
-	
-	if ( !isdefined( self.pers[ "bots" ][ "unlocks" ][ "upgraded_" + perkName ] ) || !self.pers[ "bots" ][ "unlocks" ][ "upgraded_" + perkName ] )
-	{
-		return "specialty_null";
-	}
-	
-	return ( perkUpgrade );
-}
-
-/*
-	Patches giveLoadout so that it doesn't use IsItemUnlocked
-*/
-botLoadoutAllPerks( loadoutEquipment, loadoutPerk1, loadoutPerk2, loadoutPerk3 )
-{
-	loadoutEquipment = maps\mp\perks\_perks::validateperk( 1, loadoutEquipment );
-	loadoutPerk1 = maps\mp\perks\_perks::validateperk( 1, loadoutPerk1 );
-	loadoutPerk2 = maps\mp\perks\_perks::validateperk( 2, loadoutPerk2 );
-	loadoutPerk3 = maps\mp\perks\_perks::validateperk( 3, loadoutPerk3 );
-	
-	self maps\mp\perks\_perks::giveperk( loadoutEquipment );
-	self maps\mp\perks\_perks::giveperk( loadoutPerk1 );
-	self maps\mp\perks\_perks::giveperk( loadoutPerk2 );
-	self maps\mp\perks\_perks::giveperk( loadoutPerk3 );
-	
-	perks[ 0 ] = loadoutPerk1;
-	perks[ 1 ] = loadoutPerk2;
-	perks[ 2 ] = loadoutPerk3;
-	
-	perkUpgrd[ 0 ] = tablelookup( "mp/perktable.csv", 1, loadoutPerk1, 8 );
-	perkUpgrd[ 1 ] = tablelookup( "mp/perktable.csv", 1, loadoutPerk2, 8 );
-	perkUpgrd[ 2 ] = tablelookup( "mp/perktable.csv", 1, loadoutPerk3, 8 );
-	
-	for ( i = 0; i < perkUpgrd.size; i++ )
-	{
-		upgrade = perkUpgrd[ i ];
-		perk = perks[ i ];
-		
-		if ( upgrade == "" || upgrade == "specialty_null" )
-		{
-			continue;
-		}
-		
-		if ( isdefined( self.pers[ "bots" ][ "unlocks" ][ "upgraded_" + perk ] ) && self.pers[ "bots" ][ "unlocks" ][ "upgraded_" + perk ] )
-		{
-			self maps\mp\perks\_perks::giveperk( upgrade );
-		}
-	}
-	
-}
-
-/*
-	Patches giveLoadout so that it doesn't use IsItemUnlocked
-*/
-botPlayerModelForWeapon( weapon, secondary )
-{
-	team = self.team;
-	
-	
-	if ( isdefined( game[ team + "_model" ][ weapon ] ) )
-	{
-		[[ game[ team + "_model" ][ weapon ] ]]();
-		return;
-	}
-	
-	
-	weaponclass = tablelookup( "mp/statstable.csv", 4, weapon, 2 );
-	
-	switch ( weaponclass )
-	{
-		case "weapon_smg":
-			[[ game[ team + "_model" ][ "SMG" ] ]]();
-			break;
-			
-		case "weapon_assault":
-			weaponclass = tablelookup( "mp/statstable.csv", 4, secondary, 2 );
-			
-			if ( weaponclass == "weapon_shotgun" )
-			{
-				[[ game[ team + "_model" ][ "SHOTGUN" ] ]]();
-			}
-			else
-			{
-				[[ game[ team + "_model" ][ "ASSAULT" ] ]]();
-			}
-			
-			break;
-			
-		case "weapon_sniper":
-			if ( level.environment != "" && isdefined( self.pers[ "bots" ][ "unlocks" ][ "ghillie" ] ) && self.pers[ "bots" ][ "unlocks" ][ "ghillie" ] )
-			{
-				[[ game[ team + "_model" ][ "GHILLIE" ] ]]();
-			}
-			else
-			{
-				[[ game[ team + "_model" ][ "SNIPER" ] ]]();
-			}
-			
-			break;
-			
-		case "weapon_lmg":
-			[[ game[ team + "_model" ][ "LMG" ] ]]();
-			break;
-			
-		case "weapon_riot":
-			[[ game[ team + "_model" ][ "RIOT" ] ]]();
-			break;
-			
-		default:
-			[[ game[ team + "_model" ][ "ASSAULT" ] ]]();
-			break;
-	}
-}
-
-/*
-	Make player ref attach to rocket ent
-*/
-tryUsePredatorMissileFix( lifeId )
-{
-	if ( isdefined( level.civilianjetflyby ) )
-	{
-		self iprintlnbold( &"MP_CIVILIAN_AIR_TRAFFIC" );
-		return false;
-	}
-	
-	self setusingremote( "remotemissile" );
-	result = self maps\mp\killstreaks\_killstreaks::initridekillstreak();
-	
-	if ( result != "success" )
-	{
-		if ( result != "disconnect" )
-		{
-			self clearusingremote();
-		}
-		
-		return false;
-	}
-	
-	level thread _fireFix( lifeId, self );
-	
-	return true;
-}
-
-/*
-	Make player ref attach to rocket ent
-*/
-_fireFix( lifeId, player )
-{
-	remoteMissileSpawnArray = getentarray( "remoteMissileSpawn", "targetname" );
-	//assertEX( remoteMissileSpawnArray.size > 0 && getMapCustom( "map" ) != "", "No remote missile spawn points found.  Contact friendly neighborhood designer" );
-	
-	foreach ( spawn in remoteMissileSpawnArray )
-	{
-		if ( isdefined( spawn.target ) )
-		{
-			spawn.targetent = getent( spawn.target, "targetname" );
-		}
-	}
-	
-	if ( remoteMissileSpawnArray.size > 0 )
-	{
-		remoteMissileSpawn = player maps\mp\killstreaks\_remotemissile::getbestspawnpoint( remoteMissileSpawnArray );
-	}
-	else
-	{
-		remoteMissileSpawn = undefined;
-	}
-	
-	if ( isdefined( remoteMissileSpawn ) )
-	{
-		startPos = remoteMissileSpawn.origin;
-		targetPos = remoteMissileSpawn.targetent.origin;
-		
-		//thread drawLine( startPos, targetPos, 30, (0,1,0) );
-		
-		vector = vectornormalize( startPos - targetPos );
-		startPos = vector_multiply( vector, 14000 ) + targetPos;
-		
-		//thread drawLine( startPos, targetPos, 15, (1,0,0) );
-		
-		rocket = magicbullet( "remotemissile_projectile_mp", startpos, targetPos, player );
-	}
-	else
-	{
-		upVector = ( 0, 0, level.missileremotelaunchvert );
-		backDist = level.missileremotelaunchhorz;
-		targetDist = level.missileremotelaunchtargetdist;
-		
-		forward = anglestoforward( player.angles );
-		startpos = player.origin + upVector + forward * backDist * -1;
-		targetPos = player.origin + forward * targetDist;
-		
-		rocket = magicbullet( "remotemissile_projectile_mp", startpos, targetPos, player );
-	}
-	
-	if ( !isdefined( rocket ) )
-	{
-		player clearusingremote();
-		return;
-	}
-	
-	rocket thread maps\mp\gametypes\_weapons::addmissiletosighttraces( player.team );
-	
-	rocket thread maps\mp\killstreaks\_remotemissile::handledamage();
-	
-	rocket.lifeid = lifeId;
-	rocket.type = "remote";
-	MissileEyesFix( player, rocket );
-}
-
-/*
-	Make player ref attach to rocket ent
-*/
-MissileEyesFix( player, rocket )
-{
-	//level endon ( "game_ended" );
-	player endon( "joined_team" );
-	player endon( "joined_spectators" );
-	
-	rocket thread maps\mp\killstreaks\_remotemissile::rocket_cleanupondeath();
-	player thread maps\mp\killstreaks\_remotemissile::player_cleanupongameended( rocket );
-	player thread maps\mp\killstreaks\_remotemissile::player_cleanuponteamchange( rocket );
-	
-	player visionsetmissilecamforplayer( "black_bw", 0 );
-	
-	player endon ( "disconnect" );
-	
-	if ( isdefined( rocket ) )
-	{
-		player visionsetmissilecamforplayer( game["thermal_vision"], 1.0 );
-		player thread maps\mp\killstreaks\_remotemissile::delayedfofoverlay();
-		player cameralinkto( rocket, "tag_origin" );
-		player controlslinkto( rocket );
-		
-		// our additions
-		player.rocket = rocket;
-		rocket.owner = player;
-		
-		if ( getdvarint( "camera_thirdPerson" ) )
-		{
-			player setthirdpersondof( false );
-		}
-		
-		rocket waittill( "death" );
-		
-		// is defined check required because remote missile doesnt handle lifetime explosion gracefully
-		// instantly deletes its self after an explode and death notify
-		if ( isdefined( rocket ) )
-		{
-			player maps\mp\_matchdata::logkillstreakevent( "predator_missile", rocket.origin );
-		}
-		
-		player controlsunlink();
-		player freezecontrolswrapper( true );
-		player.rocket = undefined; // our addition
-		
-		// If a player gets the final kill with a hellfire, level.gameEnded will already be true at this point
-		if ( !level.gameended || isdefined( player.finalkill ) )
-		{
-			player thread maps\mp\killstreaks\_remotemissile::staticeffect( 0.5 );
-		}
-		
-		wait ( 0.5 );
-		
-		player thermalvisionfofoverlayoff();
-		
-		player cameraunlink();
-		
-		if ( getdvarint( "camera_thirdPerson" ) )
-		{
-			player setthirdpersondof( true );
-		}
-		
-	}
-	
-	player clearusingremote();
 }

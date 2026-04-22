@@ -1,6 +1,6 @@
-# IW4 Bot Warfare Waypoints
+# IW3 Bot Warfare Waypoints
 
-Welcome to the collection of waypoints for IW4 Bot Warfare.
+Welcome to the collection of waypoints for IW3 Bot Warfare.
 
 This repo contains all of the waypoints in CSV format, a format that Bot Warfare can read at run time.
 
@@ -11,9 +11,10 @@ This repo contains all of the waypoints in CSV format, a format that Bot Warfare
 
 ## Waypoint Creators
 
-VicRattlehead
-
-Boxhead78
-
-IKennyAgain
-
+- Freddy & Metaljag
+- CannerZ45
+- JAK (BF2all)
+- MikeTheGuy
+- Botmancod
+- Hugo HG
+- Stendby

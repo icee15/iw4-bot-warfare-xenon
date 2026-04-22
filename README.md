@@ -1,3 +1,8 @@
+> [!Note]
+> This is a fork of ineedbots/iw4_bot_warfare adapted for **Xbox 360** (Xenon).
+
+---
+
 ![GitHub Logo](/bw-assets/bw-logo.png)
 
 # IW4 Bot Warfare

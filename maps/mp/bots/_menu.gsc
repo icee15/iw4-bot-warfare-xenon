@@ -55,6 +55,26 @@ watchPlayers()
 	}
 }
 
+init_menu()
+{
+	self.menuinit = true;
+	
+	self.menuopen = false;
+	self.submenu = "Main";
+	self.curs[ "Main" ][ "X" ] = 0;
+	self addOptions();
+	
+	self thread watchPlayerOpenMenu();
+	self thread MenuSelect();
+	self thread MenuBack();
+	self thread RightMenu();
+	self thread LeftMenu();
+	
+	self thread watchDisconnect();
+	
+	self thread doGreetings();
+}
+
 destroyFixed()
 {
 	if ( !isdefined( self ) )
@@ -100,27 +120,6 @@ kill_menu()
 {
 	self notify( "bots_kill_menu" );
 	self.menuinit = undefined;
-}
-
-init_menu()
-{
-	self.menuinit = true;
-	
-	self.menuopen = false;
-	self.submenu = "Main";
-	self.curs[ "Main" ][ "X" ] = 0;
-	self addOptions();
-	
-	self thread watchPlayerOpenMenu();
-	self thread MenuSelect();
-	self thread RightMenu();
-	self thread LeftMenu();
-	self thread UpMenu();
-	self thread DownMenu();
-	
-	self thread watchDisconnect();
-	
-	self thread doGreetings();
 }
 
 watchDisconnect()
@@ -178,7 +177,7 @@ doGreetings()
 	wait 1;
 	self iprintln( "Welcome to Bot Warfare " + self.name + "!" );
 	wait 5;
-	self iprintln( "Press [{+actionslot 2}] to open menu!" );
+	self iprintln( "Press [{+usereload}] + [{+melee}] to open menu!" );
 }
 
 watchPlayerOpenMenu()
@@ -186,38 +185,21 @@ watchPlayerOpenMenu()
 	self endon ( "disconnect" );
 	self endon ( "bots_kill_menu" );
 	
-	self notifyonplayercommand( "bots_open_menu", "+actionslot 2" );
-	
 	for ( ;; )
 	{
-		self waittill( "bots_open_menu" );
+		while ( !self usebuttonpressed() || !self meleebuttonpressed() )
+		{
+			wait 0.05;
+		}
 		
 		if ( !self.menuopen )
 		{
 			self playlocalsound( "mouse_click" );
 			self thread OpenSub( self.submenu );
 		}
-		else
+		while ( self usebuttonpressed() && self meleebuttonpressed() )
 		{
-			self playlocalsound( "mouse_click" );
-			
-			if ( self.submenu != "Main" )
-			{
-				self ExitSub();
-			}
-			else
-			{
-				self ExitMenu();
-				
-				if ( !gameflag( "prematch_done" ) || level.gameended )
-				{
-					self freezecontrols( true );
-				}
-				else
-				{
-					self freezecontrols( false );
-				}
-			}
+			wait 0.05;
 		}
 	}
 }
@@ -226,13 +208,14 @@ MenuSelect()
 {
 	self endon ( "disconnect" );
 	self endon ( "bots_kill_menu" );
-	
-	self notifyonplayercommand( "bots_select", "+gostand" );
-	
+
 	for ( ;; )
 	{
-		self waittill( "bots_select" );
-		
+		while ( !self jumpbuttonpressed() )
+		{
+			wait 0.05;
+		}
+
 		if ( self.menuopen )
 		{
 			self playlocalsound( "mouse_click" );
@@ -246,6 +229,44 @@ MenuSelect()
 				self thread [[ self.option[ "Function" ][ self.submenu ][ self.curs[ self.submenu ][ "Y" ] ] ]]( self.option[ "Arg1" ][ self.submenu ][ self.curs[ self.submenu ][ "Y" ] ], self.option[ "Arg2" ][ self.submenu ][ self.curs[ self.submenu ][ "Y" ] ] );
 			}
 		}
+		
+		while ( self jumpbuttonpressed() )
+		{
+			wait 0.05;
+		}
+	}
+}
+
+MenuBack()
+{
+	self endon ( "disconnect" );
+	self endon ( "bots_kill_menu" );
+	
+	for ( ;; )
+	{
+		while ( !self meleebuttonpressed() )
+		{
+			wait 0.05;
+		}
+		
+		if ( self.menuopen && !self usebuttonpressed() )
+		{
+			self playlocalsound( "mouse_click" );
+			
+			if ( self.submenu != "Main" )
+			{
+				self ExitSub();
+			}
+			else
+			{
+				self ExitMenu();
+			}
+		}
+		
+		while ( self meleebuttonpressed() )
+		{
+			wait 0.05;
+		}
 	}
 }
 
@@ -254,23 +275,44 @@ LeftMenu()
 	self endon ( "disconnect" );
 	self endon ( "bots_kill_menu" );
 	
-	self notifyonplayercommand( "bots_left", "+moveleft" );
-	
 	for ( ;; )
 	{
-		self waittill( "bots_left" );
+		while ( !self adsbuttonpressed() )
+		{
+			wait 0.05;
+		}
 		
-		if ( self.menuopen && self.submenu == "Main" )
+		if ( self.menuopen )
 		{
 			self playlocalsound( "mouse_over" );
-			self.curs[ "Main" ][ "X" ]--;
 			
-			if ( self.curs[ "Main" ][ "X" ] < 0 )
+			if ( self.submenu == "Main" )
 			{
-				self.curs[ "Main" ][ "X" ] = self.option[ "Name" ][ self.submenu ].size - 1;
+				self.curs[ "Main" ][ "X" ]--;
+				
+				if ( self.curs[ "Main" ][ "X" ] < 0 )
+				{
+					self.curs[ "Main" ][ "X" ] = self.option[ "Name" ][ self.submenu ].size - 1;
+				}
+				
+				self CursMove( "X" );
 			}
-			
-			self CursMove( "X" );
+			else
+			{
+				self.curs[ self.submenu ][ "Y" ]--;
+				
+				if ( self.curs[ self.submenu ][ "Y" ] < 0 )
+				{
+					self.curs[ self.submenu ][ "Y" ] = self.option[ "Name" ][ self.submenu ].size - 1;
+				}
+				
+				self CursMove( "Y" );
+			}
+		}
+		
+		while ( self adsbuttonpressed() )
+		{
+			wait 0.05;
 		}
 	}
 }
@@ -280,75 +322,44 @@ RightMenu()
 	self endon ( "disconnect" );
 	self endon ( "bots_kill_menu" );
 	
-	self notifyonplayercommand( "bots_right", "+moveright" );
-	
 	for ( ;; )
 	{
-		self waittill( "bots_right" );
-		
-		if ( self.menuopen && self.submenu == "Main" )
+		while ( !self attackbuttonpressed() )
 		{
-			self playlocalsound( "mouse_over" );
-			self.curs[ "Main" ][ "X" ]++;
-			
-			if ( self.curs[ "Main" ][ "X" ] > self.option[ "Name" ][ self.submenu ].size - 1 )
-			{
-				self.curs[ "Main" ][ "X" ] = 0;
-			}
-			
-			self CursMove( "X" );
+			wait 0.05;
 		}
-	}
-}
-
-UpMenu()
-{
-	self endon ( "disconnect" );
-	self endon ( "bots_kill_menu" );
-	
-	self notifyonplayercommand( "bots_up", "+forward" );
-	
-	for ( ;; )
-	{
-		self waittill( "bots_up" );
 		
-		if ( self.menuopen && self.submenu != "Main" )
+		if ( self.menuopen )
 		{
 			self playlocalsound( "mouse_over" );
-			self.curs[ self.submenu ][ "Y" ]--;
 			
-			if ( self.curs[ self.submenu ][ "Y" ] < 0 )
+			if ( self.submenu == "Main" )
 			{
-				self.curs[ self.submenu ][ "Y" ] = self.option[ "Name" ][ self.submenu ].size - 1;
+				self.curs[ "Main" ][ "X" ]++;
+				
+				if ( self.curs[ "Main" ][ "X" ] > self.option[ "Name" ][ self.submenu ].size - 1 )
+				{
+					self.curs[ "Main" ][ "X" ] = 0;
+				}
+				
+				self CursMove( "X" );
 			}
-			
-			self CursMove( "Y" );
+			else
+			{
+				self.curs[ self.submenu ][ "Y" ]++;
+				
+				if ( self.curs[ self.submenu ][ "Y" ] > self.option[ "Name" ][ self.submenu ].size - 1 )
+				{
+					self.curs[ self.submenu ][ "Y" ] = 0;
+				}
+				
+				self CursMove( "Y" );
+			}
 		}
-	}
-}
-
-DownMenu()
-{
-	self endon ( "disconnect" );
-	self endon ( "bots_kill_menu" );
-	
-	self notifyonplayercommand( "bots_down", "+back" );
-	
-	for ( ;; )
-	{
-		self waittill( "bots_down" );
 		
-		if ( self.menuopen && self.submenu != "Main" )
+		while ( self attackbuttonpressed() )
 		{
-			self playlocalsound( "mouse_over" );
-			self.curs[ self.submenu ][ "Y" ]++;
-			
-			if ( self.curs[ self.submenu ][ "Y" ] > self.option[ "Name" ][ self.submenu ].size - 1 )
-			{
-				self.curs[ self.submenu ][ "Y" ] = 0;
-			}
-			
-			self CursMove( "Y" );
+			wait 0.05;
 		}
 	}
 }
@@ -398,7 +409,7 @@ OpenSub( menu, menu2 )
 		for ( i = 0 ; i < self.option[ "Name" ][ self.submenu ].size ; i++ )
 		{
 			self.menutext[ i ] = self createfontstring( "default", 1.6 );
-			self.menutext[ i ] setpoint( "CENTER", "CENTER", -300 + ( i * 100 ), -226 );
+			self.menutext[ i ] setpoint( "CENTER", "CENTER", -300 + ( i * 260 ), -226 );
 			self.menutext[ i ] settext( self.option[ "Name" ][ self.submenu ][ i ] );
 			
 			if ( logOldi )
@@ -410,7 +421,7 @@ OpenSub( menu, menu2 )
 			{
 				logOldi = false;
 				x = i - self.oldi;
-				self.menutext[ i ] setpoint( "CENTER", "CENTER", ( ( ( -300 ) - ( i * 100 ) ) + ( i * 100 ) ) + ( x * 100 ), -196 );
+				self.menutext[ i ] setpoint( "CENTER", "CENTER", -300 + ( x * 260 ), -196 );
 			}
 			
 			self.menutext[ i ].alpha = 1;
@@ -429,13 +440,23 @@ OpenSub( menu, menu2 )
 		self.menu[ "X" ][ "Scroller" ] = self createRectangle( "CENTER", "CENTER", self.menutext[ self.curs[ "Main" ][ "X" ] ].x, -225, 105, 22, ( 1, 0, 0 ), -1, 1, "white" );
 		
 		self CursMove( "X" );
-		
-		self.menuversionhud = initHudElem( "Bot Warfare " + level.bw_version, 0, 0 );
+
+		controlstext = "[{+gostand}] select - [{+speed_throw}]/[{+attack}] move - [{+melee}] back";
+		brandingtext = "      Bot Warfare " + level.bw_version;
+		self.menuversionhud = initHudElem( controlstext + "\n" + brandingtext, 0, 15 );
 		
 		self.menuopen = true;
+		self freezecontrols( true );
 	}
 	else
 	{
+		menuY = -160;
+		// Avoid overlap with the minimap
+		if ( self.submenu == "man_bots" )
+		{
+			menuY = -70;
+		}
+
 		if ( isdefined( self.menutexty ) )
 		{
 			for ( i = 0 ; i < self.menutexty.size ; i++ )
@@ -450,7 +471,7 @@ OpenSub( menu, menu2 )
 		for ( i = 0 ; i < self.option[ "Name" ][ self.submenu ].size ; i++ )
 		{
 			self.menutexty[ i ] = self createfontstring( "default", 1.6 );
-			self.menutexty[ i ] setpoint( "CENTER", "CENTER", self.menutext[ self.curs[ "Main" ][ "X" ] ].x, -160 + ( i * 20 ) );
+			self.menutexty[ i ] setpoint( "CENTER", "CENTER", self.menutext[ self.curs[ "Main" ][ "X" ] ].x, menuY + ( i * 20 ) );
 			self.menutexty[ i ] settext( self.option[ "Name" ][ self.submenu ][ i ] );
 			self.menutexty[ i ].alpha = 1;
 			self.menutexty[ i ].sort = 999;
@@ -525,17 +546,10 @@ ShowOptionOn( variable )
 	
 	for ( time = 0;; time += 0.05 )
 	{
-		if ( !self isonground() && isalive( self ) && gameflag( "prematch_done" ) && !level.gameended )
-		{
-			self freezecontrols( false );
-		}
-		else
-		{
-			self freezecontrols( true );
-		}
+		self freezecontrols( true );
 		
 		self setclientdvar( "r_blur", "5" );
-		self setclientdvar( "sc_blur", "15" );
+		self setclientdvar( "sc_blur", "4" );
 		self addOptions();
 		
 		if ( self.submenu == "Main" )
@@ -668,6 +682,7 @@ ExitMenu()
 	
 	self.menuopen = false;
 	self notify( "exit" );
+	self freezecontrols( false );
 	
 	self setclientdvar( "r_blur", "0" );
 	self setclientdvar( "sc_blur", "2" );
@@ -684,7 +699,7 @@ initHudElem( txt, xl, yl )
 	hud.x = xl;
 	hud.y = yl;
 	hud.foreground = true;
-	hud.fontscale = 1;
+	hud.fontscale = 1.4;
 	hud.font = "objective";
 	hud.alpha = 1;
 	hud.glow = 0;
@@ -728,6 +743,7 @@ addOptions()
 	self AddMenu( "man_bots", 2, "Add 7 bot", ::man_bots, "add", 7 + _tempDvar );
 	self AddMenu( "man_bots", 3, "Add 11 bot", ::man_bots, "add", 11 + _tempDvar );
 	self AddMenu( "man_bots", 4, "Add 17 bot", ::man_bots, "add", 17 + _tempDvar );
+	self AddMenu( "man_bots", 4, "Add 23 bot", ::man_bots, "add", 23 + _tempDvar );
 	self AddMenu( "man_bots", 5, "Kick a bot", ::man_bots, "kick", 1 );
 	self AddMenu( "man_bots", 6, "Kick all bots", ::man_bots, "kick", getBotArray().size );
 	
@@ -767,7 +783,7 @@ addOptions()
 		case 4:
 			_temp = "bots used as team balance";
 			break;
-
+			
 		case 5:
 			_temp = "bots used as team balance, adjust to map";
 			break;
@@ -984,19 +1000,6 @@ addOptions()
 	
 	self AddMenu( "set1", 5, "Bots can nade: " + _temp, ::bot_func, "nade", _tempDvar );
 	
-	_tempDvar = getdvarint( "bots_play_take_carepackages" );
-	
-	if ( _tempDvar )
-	{
-		_temp = "true";
-	}
-	else
-	{
-		_temp = "false";
-	}
-	
-	self AddMenu( "set1", 6, "Bots can take carepackages: " + _temp, ::bot_func, "care", _tempDvar );
-	
 	_tempDvar = getdvarint( "bots_play_obj" );
 	
 	if ( _tempDvar )
@@ -1008,7 +1011,7 @@ addOptions()
 		_temp = "false";
 	}
 	
-	self AddMenu( "set1", 7, "Bots play the objective: " + _temp, ::bot_func, "obj", _tempDvar );
+	self AddMenu( "set1", 6, "Bots play the objective: " + _temp, ::bot_func, "obj", _tempDvar );
 	
 	_tempDvar = getdvarint( "bots_play_camp" );
 	
@@ -1021,7 +1024,7 @@ addOptions()
 		_temp = "false";
 	}
 	
-	self AddMenu( "set1", 8, "Bots can camp: " + _temp, ::bot_func, "camp", _tempDvar );
+	self AddMenu( "set1", 7, "Bots can camp: " + _temp, ::bot_func, "camp", _tempDvar );
 	
 	_tempDvar = getdvarint( "bots_play_jumpdrop" );
 	
@@ -1034,7 +1037,7 @@ addOptions()
 		_temp = "false";
 	}
 	
-	self AddMenu( "set1", 9, "Bots can jump and dropshot: " + _temp, ::bot_func, "jump", _tempDvar );
+	self AddMenu( "set1", 8, "Bots can jump and dropshot: " + _temp, ::bot_func, "jump", _tempDvar );
 	
 	_tempDvar = getdvarint( "bots_play_target_other" );
 	
@@ -1047,7 +1050,7 @@ addOptions()
 		_temp = "false";
 	}
 	
-	self AddMenu( "set1", 10, "Bots can target other script objects: " + _temp, ::bot_func, "targetother", _tempDvar );
+	self AddMenu( "set1", 9, "Bots can target other script objects: " + _temp, ::bot_func, "targetother", _tempDvar );
 	
 	_tempDvar = getdvarint( "bots_play_killstreak" );
 	
@@ -1060,7 +1063,7 @@ addOptions()
 		_temp = "false";
 	}
 	
-	self AddMenu( "set1", 11, "Bots can use killstreaks: " + _temp, ::bot_func, "killstreak", _tempDvar );
+	self AddMenu( "set1", 10, "Bots can use killstreaks: " + _temp, ::bot_func, "killstreak", _tempDvar );
 	
 	_tempDvar = getdvarint( "bots_play_ads" );
 	
@@ -1073,7 +1076,7 @@ addOptions()
 		_temp = "false";
 	}
 	
-	self AddMenu( "set1", 12, "Bots can ads: " + _temp, ::bot_func, "ads", _tempDvar );
+	self AddMenu( "set1", 11, "Bots can ads: " + _temp, ::bot_func, "ads", _tempDvar );
 }
 
 bot_func( a, b )
@@ -1108,11 +1111,6 @@ bot_func( a, b )
 		case "nade":
 			setdvar( "bots_play_nade", !b );
 			self iprintln( "Bots nade: " + !b );
-			break;
-			
-		case "care":
-			setdvar( "bots_play_take_carepackages", !b );
-			self iprintln( "Bots take carepackages: " + !b );
 			break;
 			
 		case "obj":
@@ -1314,24 +1312,16 @@ man_bots( a, b )
 			break;
 			
 		case "kick":
-			result = false;
-			
 			for ( i = 0; i < b; i++ )
 			{
-				tempBot = random( getBotArray() );
+				tempBot = getBotToKick();
 				
 				if ( isdefined( tempBot ) )
 				{
-					kick( tempBot getentitynumber(), "EXE_PLAYERKICKED" );
-					result = true;
+					kick( tempBot getentitynumber() );
 				}
 				
 				wait 0.25;
-			}
-			
-			if ( !result )
-			{
-				self iprintln( "No bots to kick" );
 			}
 			
 			break;
@@ -1363,7 +1353,7 @@ man_bots( a, b )
 					setdvar( "bots_manage_fill_mode", 4 );
 					self iprintln( "bot_fill will now use bots as team balance." );
 					break;
-
+					
 				case 4:
 					setdvar( "bots_manage_fill_mode", 5 );
 					self iprintln( "bot_fill will now use bots as team balance, adjusting to map." );

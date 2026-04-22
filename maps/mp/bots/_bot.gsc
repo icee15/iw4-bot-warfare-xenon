@@ -1,10 +1,3 @@
-/*
-	_bot
-	Author: INeedGames
-	Date: 09/26/2020
-	The entry point and manager of the bots.
-*/
-
 #include common_scripts\utility;
 #include maps\mp\_utility;
 #include maps\mp\gametypes\_hud_util;
@@ -15,7 +8,7 @@
 */
 init()
 {
-	level.bw_version = "2.3.0";
+	level.bw_version = "2.3.0-xenon";
 	
 	if ( getdvar( "bots_main" ) == "" )
 	{
@@ -33,21 +26,12 @@ init()
 	}
 	
 	thread load_waypoints();
+	cac_init_patch();
 	thread hook_callbacks();
 	
 	if ( getdvar( "bots_main_GUIDs" ) == "" )
 	{
 		setdvar( "bots_main_GUIDs", "" ); // guids of players who will be given host powers, comma seperated
-	}
-	
-	if ( getdvar( "bots_main_firstIsHost" ) == "" )
-	{
-		setdvar( "bots_main_firstIsHost", false ); // first play to connect is a host
-	}
-	
-	if ( getdvar( "bots_main_waitForHostTime" ) == "" )
-	{
-		setdvar( "bots_main_waitForHostTime", 10.0 ); // how long to wait to wait for the host player
 	}
 	
 	if ( getdvar( "bots_main_kickBotsAtEnd" ) == "" )
@@ -152,7 +136,7 @@ init()
 	
 	if ( getdvar( "bots_loadout_rank" ) == "" ) // what rank the bots should be around, -1 is around the players, 0 is all random
 	{
-		setdvar( "bots_loadout_rank", -1 );
+		setdvar( "bots_loadout_rank", 0 );
 	}
 	
 	if ( getdvar( "bots_loadout_prestige" ) == "" ) // what pretige the bots will be, -1 is the players, -2 is random
@@ -178,11 +162,6 @@ init()
 	if ( getdvar( "bots_play_nade" ) == "" ) // bots grenade
 	{
 		setdvar( "bots_play_nade", true );
-	}
-	
-	if ( getdvar( "bots_play_take_carepackages" ) == "" ) // bots take carepackages
-	{
-		setdvar( "bots_play_take_carepackages", true );
 	}
 	
 	if ( getdvar( "bots_play_obj" ) == "" ) // bots play the obj
@@ -230,7 +209,15 @@ init()
 	
 	level.defuseobject = undefined;
 	level.bots_smokelist = List();
-	level.bots_fraglist = List();
+	level.tbl_perkdata[ 0 ][ "reference_full" ] = true;
+	
+	for ( h = 1; h < 6; h++ )
+	{
+		for ( i = 0; i < 3; i++ )
+		{
+			level.default_perk[ "CLASS_CUSTOM" + h ][ i ] = "specialty_null";
+		}
+	}
 	
 	level.bots_minsprintdistance = 315;
 	level.bots_minsprintdistance *= level.bots_minsprintdistance;
@@ -253,62 +240,29 @@ init()
 	level.bots = [];
 	
 	level.bots_fullautoguns = [];
-	level.bots_fullautoguns[ "aa12" ] = true;
-	level.bots_fullautoguns[ "ak47" ] = true;
-	level.bots_fullautoguns[ "aug" ] = true;
-	level.bots_fullautoguns[ "fn2000" ] = true;
-	level.bots_fullautoguns[ "glock" ] = true;
-	level.bots_fullautoguns[ "kriss" ] = true;
-	level.bots_fullautoguns[ "m4" ] = true;
-	level.bots_fullautoguns[ "m240" ] = true;
-	level.bots_fullautoguns[ "masada" ] = true;
-	level.bots_fullautoguns[ "mg4" ] = true;
-	level.bots_fullautoguns[ "mp5k" ] = true;
-	level.bots_fullautoguns[ "p90" ] = true;
-	level.bots_fullautoguns[ "pp2000" ] = true;
 	level.bots_fullautoguns[ "rpd" ] = true;
-	level.bots_fullautoguns[ "sa80" ] = true;
-	level.bots_fullautoguns[ "scar" ] = true;
-	level.bots_fullautoguns[ "tavor" ] = true;
-	level.bots_fullautoguns[ "tmp" ] = true;
-	level.bots_fullautoguns[ "ump45" ] = true;
-	level.bots_fullautoguns[ "uzi" ] = true;
-	
-	level.bots_fullautoguns[ "ac130" ] = true;
-	level.bots_fullautoguns[ "heli" ] = true;
-	
-	level.bots_fullautoguns[ "ak47classic" ] = true;
+	level.bots_fullautoguns[ "m60e4" ] = true;
+	level.bots_fullautoguns[ "saw" ] = true;
 	level.bots_fullautoguns[ "ak74u" ] = true;
-	level.bots_fullautoguns[ "peacekeeper" ] = true;
+	level.bots_fullautoguns[ "mp5" ] = true;
+	level.bots_fullautoguns[ "p90" ] = true;
+	level.bots_fullautoguns[ "skorpion" ] = true;
+	level.bots_fullautoguns[ "uzi" ] = true;
+	level.bots_fullautoguns[ "g36c" ] = true;
+	level.bots_fullautoguns[ "m4" ] = true;
+	level.bots_fullautoguns[ "ak47" ] = true;
+	level.bots_fullautoguns[ "mp44" ] = true;
 	
 	level thread fixGamemodes();
-	level thread fixPredMissile();
+	level thread onUAVAlliesUpdate();
+	level thread onUAVAxisUpdate();
+	level thread chopperWatch();
 	
 	level thread onPlayerConnect();
-	level thread addNotifyOnAirdrops();
-	level thread watchScrabler();
-	
 	level thread handleBots();
 	level thread onPlayerChat();
 	
 	array_thread( getentarray( "misc_turret", "classname" ), ::turret_monitoruse_watcher );
-}
-
-/*
-	Change func pointer to ours, so that we can link the player ref to the rocket
-*/
-fixPredMissile()
-{
-	for ( i = 0; i < 19; i++ )
-	{
-		if ( isdefined( level.killstreakfuncs ) && isdefined( level.killstreakfuncs[ "predator_missile" ] ) )
-		{
-			level.killstreakfuncs[ "predator_missile" ] = ::tryUsePredatorMissileFix;
-			break;
-		}
-		
-		wait 0.05;
-	}
 }
 
 /*
@@ -336,7 +290,7 @@ handleBots()
 	
 	for ( i = 0; i < bots.size; i++ )
 	{
-		kick( bots[ i ] getentitynumber(), "EXE_PLAYERKICKED" );
+		kick( bots[ i ] getentitynumber() );
 	}
 }
 
@@ -365,6 +319,14 @@ onPlayerKilled( eInflictor, eAttacker, iDamage, sMeansOfDeath, sWeapon, vDir, sH
 		self maps\mp\bots\_bot_script::onKilled( eInflictor, eAttacker, iDamage, sMeansOfDeath, sWeapon, vDir, sHitLoc, timeOffset, deathAnimDuration );
 	}
 	
+	self.lastattacker = eAttacker;
+	
+	if ( isdefined( eAttacker ) )
+	{
+		eAttacker.lastkilledplayer = self;
+		eAttacker notify( "killed_enemy" );
+	}
+	
 	self [[ level.prevcallbackplayerkilled ]]( eInflictor, eAttacker, iDamage, sMeansOfDeath, sWeapon, vDir, sHitLoc, timeOffset, deathAnimDuration );
 }
 
@@ -373,8 +335,7 @@ onPlayerKilled( eInflictor, eAttacker, iDamage, sMeansOfDeath, sWeapon, vDir, sH
 */
 hook_callbacks()
 {
-	level waittill( "prematch_over" ); // iw4madmin waits this long for some reason...
-	wait 0.05; // so we need to be one frame after it sets up its callbacks.
+	wait 0.05;
 	level.prevcallbackplayerdamage = level.callbackplayerdamage;
 	level.callbackplayerdamage = ::onPlayerDamage;
 	
@@ -383,70 +344,7 @@ hook_callbacks()
 }
 
 /*
-	Fixes gamemodes when level starts.
-*/
-fixGamemodes()
-{
-	for ( i = 0; i < 19; i++ )
-	{
-		if ( isdefined( level.bombzones ) && level.gametype == "sd" )
-		{
-			for ( i = 0; i < level.bombzones.size; i++ )
-			{
-				level.bombzones[ i ].onuse = ::onUsePlantObjectFix;
-			}
-			
-			break;
-		}
-		
-		if ( isdefined( level.radios ) && level.gametype == "koth" )
-		{
-			level thread fixKoth();
-			
-			break;
-		}
-		
-		if ( isdefined( level.bombzones ) && level.gametype == "dd" )
-		{
-			level thread fixDem();
-			
-			break;
-		}
-		
-		wait 0.05;
-	}
-}
-
-/*
-	Converts t5 dd to iw4
-*/
-fixDem()
-{
-	for ( ;; )
-	{
-		level.bombaplanted = level.aplanted;
-		level.bombbplanted = level.bplanted;
-		
-		for ( i = 0; i < level.bombzones.size; i++ )
-		{
-			bombzone = level.bombzones[ i ];
-			
-			if ( isdefined( bombzone.trigger.trigger_off ) )
-			{
-				bombzone.bombexploded = true;
-			}
-			else
-			{
-				bombzone.bombexploded = undefined;
-			}
-		}
-		
-		wait 0.05;
-	}
-}
-
-/*
-	Fixes the king of the hill headquarters obj
+	Adds the level.radio object for koth. Cause the iw3 script doesn't have it.
 */
 fixKoth()
 {
@@ -480,68 +378,30 @@ fixKoth()
 }
 
 /*
-	Adds a notify when the airdrop is dropped
+	Fixes gamemodes when level starts.
 */
-addNotifyOnAirdrops_loop()
+fixGamemodes()
 {
-	dropCrates = getentarray( "care_package", "targetname" );
-	
-	for ( i = dropCrates.size - 1; i >= 0; i-- )
+	for ( i = 0; i < 19; i++ )
 	{
-		airdrop = dropCrates[ i ];
-		
-		if ( isdefined( airdrop.doingphysics ) )
+		if ( isdefined( level.bombzones ) && level.gametype == "sd" )
 		{
-			continue;
+			for ( i = 0; i < level.bombzones.size; i++ )
+			{
+				level.bombzones[ i ].onuse = ::onUsePlantObjectFix;
+			}
+			
+			break;
 		}
 		
-		airdrop.doingphysics = true;
-		airdrop thread doNotifyOnAirdrop();
-	}
-}
-
-/*
-	Adds a notify when the airdrop is dropped
-*/
-addNotifyOnAirdrops()
-{
-	for ( ;; )
-	{
-		wait 1;
-		addNotifyOnAirdrops_loop();
-	}
-}
-
-/*
-	Does the notify
-*/
-doNotifyOnAirdrop()
-{
-	self endon( "death" );
-	self waittill( "physics_finished" );
-	
-	self.doingphysics = false;
-	
-	if ( isdefined( self.owner ) )
-	{
-		self.owner notify( "crate_physics_done" );
-	}
-	
-	self thread onCarepackageCaptured();
-}
-
-/*
-	Waits to be captured
-*/
-onCarepackageCaptured()
-{
-	self endon( "death" );
-	
-	self waittill( "captured", player );
-	
-	if ( isdefined( self.owner ) && self.owner is_bot() )
-	{
-		self.owner BotNotifyBotEvent( "crate_cap", "captured", self, player );
+		if ( isdefined( level.radios ) && level.gametype == "koth" )
+		{
+			level thread fixKoth();
+			
+			break;
+		}
+		
+		wait 0.05;
 	}
 }
 
@@ -554,75 +414,31 @@ onPlayerConnect()
 	{
 		level waittill( "connected", player );
 		
-		player.bot_isscrambled = false;
-		
 		player thread onGrenadeFire();
 		player thread onWeaponFired();
+		player thread doPlayerModelFix();
 		
 		player thread connected();
 	}
 }
 
 /*
-	Watches players with scrambler perk
+	Fixes bots perks showing up in killcams and prevents bots from being kicked from old iw3 gsc script.
 */
-watchScrabler_loop()
+fixPerksAndScriptKick()
 {
-	for ( i = level.players.size - 1; i >= 0; i-- )
+	self endon( "disconnect" );
+	
+	self waittill( "spawned" );
+	
+	self.pers[ "isBot" ] = undefined;
+	
+	if ( !level.gameended )
 	{
-		player = level.players[ i ];
-		player.bot_isscrambled = false;
+		level waittill ( "game_ended" );
 	}
 	
-	for ( i = level.players.size - 1; i >= 0; i-- )
-	{
-		player = level.players[ i ];
-		
-		if ( !player _hasperk( "specialty_localjammer" ) || !isreallyalive( player ) )
-		{
-			continue;
-		}
-		
-		if ( player isemped() )
-		{
-			continue;
-		}
-		
-		for ( h = level.players.size - 1; h >= 0; h-- )
-		{
-			player2 = level.players[ h ];
-			
-			if ( player2 == player )
-			{
-				continue;
-			}
-			
-			if ( level.teambased && player2.team == player.team )
-			{
-				continue;
-			}
-			
-			if ( distancesquared( player2.origin, player.origin ) > 256 * 256 )
-			{
-				continue;
-			}
-			
-			player2.bot_isscrambled = true;
-		}
-	}
-}
-
-/*
-	Watches players with scrambler perk
-*/
-watchScrabler()
-{
-	for ( ;; )
-	{
-		wait 1;
-		
-		watchScrabler_loop();
-	}
+	self.pers[ "isBot" ] = true;
 }
 
 /*
@@ -679,7 +495,7 @@ connected()
 	
 	if ( !isdefined( self.pers[ "isBot" ] ) )
 	{
-		// fast_restart occured...
+		// fast restart...
 		self.pers[ "isBot" ] = true;
 	}
 	
@@ -689,12 +505,13 @@ connected()
 		self thread added();
 	}
 	
+	self thread fixPerksAndScriptKick();
+	
 	self thread maps\mp\bots\_bot_internal::connected();
 	self thread maps\mp\bots\_bot_script::connected();
 	
 	level.bots[ level.bots.size ] = self;
 	self thread onDisconnect();
-	
 	self thread watchBotDebugEvent();
 
 	waittillframeend; // wait for waittills to process
@@ -776,7 +593,19 @@ added()
 */
 add_bot()
 {
-	bot = addtestclient();
+	// cod4x specific
+	name = getABotName();
+	
+	bot = undefined;
+	
+	if ( isdefined( name ) && name.size >= 3 )
+	{
+		bot = addtestclient( name );
+	}
+	else
+	{
+		bot = addtestclient();
+	}
 	
 	if ( isdefined( bot ) )
 	{
@@ -1069,6 +898,7 @@ teamBots()
 	for ( ;; )
 	{
 		wait 1.5;
+		
 		teamBots_loop();
 	}
 }
@@ -1243,46 +1073,7 @@ onGrenadeFire()
 		{
 			grenade thread AddToSmokeList();
 		}
-		else if ( issubstr( weaponName, "frag_" ) )
-		{
-			grenade thread AddToFragList( self );
-		}
 	}
-}
-
-/*
-	Adds a frag grenade to the list of all frags
-*/
-AddToFragList( who )
-{
-	grenade = spawnstruct();
-	grenade.origin = self getorigin();
-	grenade.velocity = ( 0, 0, 0 );
-	grenade.grenade = self;
-	grenade.owner = who;
-	grenade.team = who.team;
-	grenade.throwback = undefined;
-	
-	grenade thread thinkFrag();
-	
-	level.bots_fraglist ListAdd( grenade );
-}
-
-/*
-	Watches while the frag exists
-*/
-thinkFrag()
-{
-	while ( isdefined( self.grenade ) )
-	{
-		nowOrigin = self.grenade getorigin();
-		self.velocity = ( nowOrigin - self.origin ) * 20;
-		self.origin = nowOrigin;
-		
-		wait 0.05;
-	}
-	
-	level.bots_fraglist ListRemove( self );
 }
 
 /*
@@ -1316,6 +1107,132 @@ thinkSmoke()
 	wait 11.5;
 	
 	level.bots_smokelist ListRemove( self );
+}
+
+/*
+	Watches for chopper. This is used to fix bots from targeting leaving or crashing helis because script is iw3 old and buggy.
+*/
+chopperWatch()
+{
+	for ( ;; )
+	{
+		while ( !isdefined( level.chopper ) )
+		{
+			wait 0.05;
+		}
+		
+		chopper = level.chopper;
+		
+		if ( level.teambased && getdvarint( "doubleHeli" ) )
+		{
+			chopper = level.chopper[ "allies" ];
+			
+			if ( !isdefined( chopper ) )
+			{
+				chopper = level.chopper[ "axis" ];
+			}
+		}
+		
+		level.bot_chopper = true;
+		chopper watchChopper();
+		level.bot_chopper = false;
+		
+		while ( isdefined( level.chopper ) )
+		{
+			wait 0.05;
+		}
+	}
+}
+
+/*
+	Waits until the chopper is deleted, leaving or crashing.
+*/
+watchChopper()
+{
+	self endon( "death" );
+	self endon( "leaving" );
+	self endon( "crashing" );
+	
+	level waittill( "helicopter gone" );
+}
+
+/*
+	Waits when the axis uav is called in.
+*/
+onUAVAxisUpdate()
+{
+	for ( ;; )
+	{
+		level waittill( "radar_timer_kill_axis" );
+		level thread doUAVUpdate( "axis" );
+	}
+}
+
+/*
+	Waits when the allies uav is called in.
+*/
+onUAVAlliesUpdate()
+{
+	for ( ;; )
+	{
+		level waittill( "radar_timer_kill_allies" );
+		level thread doUAVUpdate( "allies" );
+	}
+}
+
+/*
+	Updates the player's radar so bots can know when they have a uav up, because iw3 script is old.
+*/
+doUAVUpdate( team )
+{
+	level endon( "radar_timer_kill_" + team );
+	
+	playercount = level.players.size;
+	
+	for ( i = 0; i < playercount; i++ )
+	{
+		player = level.players[ i ];
+		
+		if ( !isdefined( player.team ) )
+		{
+			continue;
+		}
+		
+		if ( player.team == team )
+		{
+			player.bot_radar = true;
+		}
+	}
+	
+	wait level.radarviewtime;
+	
+	playercount = level.players.size;
+	
+	for ( i = 0; i < playercount; i++ )
+	{
+		player = level.players[ i ];
+		
+		if ( !isdefined( player.team ) )
+		{
+			continue;
+		}
+		
+		if ( player.team == team )
+		{
+			player.bot_radar = false;
+		}
+	}
+}
+
+/*
+	Fixes a weird iw3 bug when for a frame the player doesn't have any bones when they first spawn in.
+*/
+doPlayerModelFix()
+{
+	self endon( "disconnect" );
+	self waittill( "spawned_player" );
+	wait 0.05;
+	self.bot_model_fix = true;
 }
 
 /*
@@ -1396,5 +1313,13 @@ monitor_player_turret( player )
 	player.turret = self;
 	self.owner = player;
 	
-	self waittill( "turret_deactivate" );
+	while ( isdefined( player ) && player usebuttonpressed() )
+	{
+		wait 0.05;
+	}
+	
+	while ( isdefined( player ) && !player usebuttonpressed() )
+	{
+		wait 0.05;
+	}
 }
